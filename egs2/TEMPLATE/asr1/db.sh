@@ -11,6 +11,7 @@ ALFFA=downloads
 AMERICASNLP22=downloads
 AN4=downloads
 AUDIOSET=
+ASV2019=/mnt/d/jiatong/asvspoof
 DIRHA_ENGLISH_PHDEV=
 DIRHA_WSJ=
 DIRHA_WSJ_PROCESSED="${PWD}/data/local/dirha_wsj_processed"  # Output file path
