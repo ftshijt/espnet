@@ -4,7 +4,7 @@
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
 set -e
 set -u
-set -o pipefail
+# set -o pipefail
 
 log() {
     local fname=${BASH_SOURCE[1]##*/}
@@ -158,7 +158,7 @@ if ! "${skip_data_prep}"; then
     if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
         log "Stage 1: Data preparation for data/${train_set}, data/${valid_set}, etc."
         # [Task dependent] Need to create data.sh for new corpus
-        local/data.sh ${local_data_opts}
+        bash local/data.sh ${local_data_opts}
     fi
 
     if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
@@ -177,7 +177,7 @@ if ! "${skip_data_prep}"; then
             rm -f ${data_feats}/${dset}/{wav.scp,reco2file_and_channel}
 
             # shellcheck disable=SC2086
-            scripts/audio/format_wav_scp.sh --nj "${nj}" --cmd "${train_cmd}" \
+            bash scripts/audio/format_wav_scp.sh --nj "${nj}" --cmd "${train_cmd}" \
                 --audio-format "${audio_format}" --fs "${fs}"  \
                 "data/${dset}/wav.scp" "${data_feats}/${dset}"
             
@@ -393,8 +393,11 @@ if ! "${skip_eval}"; then
 
             # 3. Concatenates the output files from each jobs
             for i in $(seq "${_nj}"); do
-                cat "${_logdir}/output.${i}/asvspoof.scp"
-            done | LC_ALL=C sort -k1 > "${_dir}/asvspoof.scp"
+                cat "${_logdir}/output.${i}/prediction/score"
+            done | LC_ALL=C sort -k1 > "${_dir}/score"
+            for i in $(seq "${_nj}"); do
+                cat "${_logdir}/output.${i}/prediction/antispoof"
+            done | LC_ALL=C sort -k1 > "${_dir}/antispoof"
 
         done
     fi
@@ -409,7 +412,7 @@ if ! "${skip_eval}"; then
             _dir="${asvspoof_exp}/asvspoof_${dset}/scoring"
             mkdir -p "${_dir}"
 
-            scripts/utils/score.sh # TODO(jiatong)
+            python scripts/utils/score.py -g "${_data}/text" -p "${_inf_dir}/score" > "${asvspoof_exp}"/RESULTS.md # TODO(jiatong)
         done
 
         # Show results in Markdown syntax # TODO(Jiatong)

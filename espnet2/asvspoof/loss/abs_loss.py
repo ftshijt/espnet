@@ -18,7 +18,17 @@ class AbsASVSpoofLoss(torch.nn.Module, ABC):
     @abstractmethod
     def forward(
         self,
+        emb,
         ref,
+        inf,
+    ) -> torch.Tensor:
+        # the return tensor should be shape of (batch)
+        raise NotImplementedError
+
+    @abstractmethod
+    def score(
+        self,
+        emb,
         inf,
     ) -> torch.Tensor:
         # the return tensor should be shape of (batch)
