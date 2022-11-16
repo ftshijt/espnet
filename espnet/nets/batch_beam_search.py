@@ -1,17 +1,12 @@
 """Parallel beam search module."""
 
 import logging
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import NamedTuple
-from typing import Tuple
+from typing import Any, Dict, List, NamedTuple, Tuple
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from espnet.nets.beam_search import BeamSearch
-from espnet.nets.beam_search import Hypothesis
+from espnet.nets.beam_search import BeamSearch, Hypothesis
 
 
 class BatchHypothesis(NamedTuple):
@@ -341,8 +336,8 @@ class BatchBeamSearch(BeamSearch):
             running_hyps.yseq[torch.arange(n_batch), running_hyps.length - 1]
             == self.eos
         )
-        for b in torch.nonzero(is_eos).view(-1):
+        for b in torch.nonzero(is_eos, as_tuple=False).view(-1):
             hyp = self._select(running_hyps, b)
             ended_hyps.append(hyp)
-        remained_ids = torch.nonzero(is_eos == 0).view(-1)
+        remained_ids = torch.nonzero(is_eos == 0, as_tuple=False).view(-1)
         return self._batch_select(running_hyps, remained_ids)

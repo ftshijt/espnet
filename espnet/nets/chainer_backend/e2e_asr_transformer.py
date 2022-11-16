@@ -1,36 +1,34 @@
 # encoding: utf-8
 """Transformer-based model for End-to-end ASR."""
 
-from argparse import Namespace
-from distutils.util import strtobool
 import logging
 import math
+from argparse import Namespace
+from distutils.util import strtobool
 
 import chainer
 import chainer.functions as F
-from chainer import reporter
 import numpy as np
 import six
+from chainer import reporter
 
 from espnet.nets.chainer_backend.asr_interface import ChainerASRInterface
-from espnet.nets.chainer_backend.transformer.attention import MultiHeadAttention
 from espnet.nets.chainer_backend.transformer import ctc
+from espnet.nets.chainer_backend.transformer.attention import MultiHeadAttention
 from espnet.nets.chainer_backend.transformer.decoder import Decoder
 from espnet.nets.chainer_backend.transformer.encoder import Encoder
-from espnet.nets.chainer_backend.transformer.label_smoothing_loss import (
-    LabelSmoothingLoss,  # noqa: H301
+from espnet.nets.chainer_backend.transformer.label_smoothing_loss import (  # noqa: H301
+    LabelSmoothingLoss,
 )
-from espnet.nets.chainer_backend.transformer.training import CustomConverter
-from espnet.nets.chainer_backend.transformer.training import CustomUpdater
-from espnet.nets.chainer_backend.transformer.training import (
-    CustomParallelUpdater,  # noqa: H301
+from espnet.nets.chainer_backend.transformer.training import (  # noqa: H301
+    CustomConverter,
+    CustomParallelUpdater,
+    CustomUpdater,
 )
 from espnet.nets.ctc_prefix_score import CTCPrefixScore
-from espnet.nets.e2e_asr_common import end_detect
-from espnet.nets.e2e_asr_common import ErrorCalculator
+from espnet.nets.e2e_asr_common import ErrorCalculator, end_detect
 from espnet.nets.pytorch_backend.nets_utils import get_subsample
 from espnet.nets.pytorch_backend.transformer.plot import PlotAttentionReport
-
 
 CTC_SCORING_RATIO = 1.5
 MAX_DECODER_OUTPUT = 5
@@ -154,7 +152,7 @@ class E2E(ChainerASRInterface):
         self.char_list = args.char_list
         self.space = args.sym_space
         self.blank = args.sym_blank
-        self.scale_emb = args.adim ** 0.5
+        self.scale_emb = args.adim**0.5
         self.sos = odim - 1
         self.eos = odim - 1
         self.subsample = get_subsample(args, mode="asr", arch="transformer")
@@ -185,14 +183,9 @@ class E2E(ChainerASRInterface):
                 if args.ctc_type == "builtin":
                     logging.info("Using chainer CTC implementation")
                     self.ctc = ctc.CTC(odim, args.adim, args.dropout_rate)
-                elif args.ctc_type == "warpctc":
-                    logging.info("Using warpctc CTC implementation")
-                    self.ctc = ctc.WarpCTC(odim, args.adim, args.dropout_rate)
                 else:
                     raise ValueError(
-                        'ctc_type must be "builtin" or "warpctc": {}'.format(
-                            args.ctc_type
-                        )
+                        'ctc_type must be "builtin": {}'.format(args.ctc_type)
                     )
             else:
                 self.ctc = None
@@ -252,7 +245,7 @@ class E2E(ChainerASRInterface):
         """E2E forward propagation.
 
         Args:
-            xs (chainer.Variable): Batch of padded charactor ids. (B, Tmax)
+            xs (chainer.Variable): Batch of padded character ids. (B, Tmax)
             ilens (chainer.Variable): Batch of length of each input batch. (B,)
             ys (chainer.Variable): Batch of padded target features. (B, Lmax, odim)
             calculate_attentions (bool): If true, return value is the output of encoder.
@@ -381,7 +374,7 @@ class E2E(ChainerASRInterface):
         """E2E beam search.
 
         Args:
-            h (ndarray): Encoder ouput features (B, T, D) or (T, D).
+            h (ndarray): Encoder output features (B, T, D) or (T, D).
             lpz (ndarray): Log probabilities from CTC.
             recog_args (Namespace): Argment namespace contraining options.
             char_list (List[str]): List of characters.
@@ -506,7 +499,7 @@ class E2E(ChainerASRInterface):
 
             # add eos in the final loop to avoid that there are no ended hyps
             if i == maxlen - 1:
-                logging.info("adding <eos> in the last postion in the loop")
+                logging.info("adding <eos> in the last position in the loop")
                 for hyp in hyps:
                     hyp["yseq"].append(self.eos)
 

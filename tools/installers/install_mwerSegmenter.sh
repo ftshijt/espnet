@@ -1,10 +1,16 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 
 if [ $# != 0 ]; then
     echo "Usage: $0"
     exit 1;
+fi
+
+unames="$(uname -s)"
+if [[ ! ${unames} =~ Linux && ! ${unames} =~ Darwin ]]; then
+    echo "Warning: This script may not work with ${unames}. Exit with doing nothing"
+    exit 0
 fi
 
 wget --tries=3 https://www-i6.informatik.rwth-aachen.de/web/Software/mwerSegmenter.tar.gz

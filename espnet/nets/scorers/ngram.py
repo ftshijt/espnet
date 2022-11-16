@@ -5,12 +5,11 @@ from abc import ABC
 import kenlm
 import torch
 
-from espnet.nets.scorer_interface import BatchScorerInterface
-from espnet.nets.scorer_interface import PartialScorerInterface
+from espnet.nets.scorer_interface import BatchScorerInterface, PartialScorerInterface
 
 
 class Ngrambase(ABC):
-    """Ngram base implemented throught ScorerInterface."""
+    """Ngram base implemented through ScorerInterface."""
 
     def __init__(self, ngram_model, token_list):
         """Initialize Ngrambase.

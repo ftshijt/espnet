@@ -3,54 +3,40 @@
 
 """Training/decoding definition for the speech translation task."""
 
+import itertools
 import json
 import logging
 import os
-import sys
 
+import numpy as np
+import torch
 from chainer import training
 from chainer.training import extensions
-import numpy as np
-from tensorboardX import SummaryWriter
-import torch
 
-from espnet.asr.asr_utils import adadelta_eps_decay
-from espnet.asr.asr_utils import adam_lr_decay
-from espnet.asr.asr_utils import add_results_to_json
-from espnet.asr.asr_utils import CompareValueTrigger
-from espnet.asr.asr_utils import restore_snapshot
-from espnet.asr.asr_utils import snapshot_object
-from espnet.asr.asr_utils import torch_load
-from espnet.asr.asr_utils import torch_resume
-from espnet.asr.asr_utils import torch_snapshot
-from espnet.asr.pytorch_backend.asr_init import load_trained_model
-from espnet.asr.pytorch_backend.asr_init import load_trained_modules
-
+from espnet.asr.asr_utils import (
+    CompareValueTrigger,
+    adadelta_eps_decay,
+    adam_lr_decay,
+    add_results_to_json,
+    restore_snapshot,
+    snapshot_object,
+    torch_load,
+    torch_resume,
+    torch_snapshot,
+)
+from espnet.asr.pytorch_backend.asr import CustomConverter as ASRCustomConverter
+from espnet.asr.pytorch_backend.asr import CustomEvaluator, CustomUpdater
+from espnet.asr.pytorch_backend.asr_init import load_trained_model, load_trained_modules
 from espnet.nets.pytorch_backend.e2e_asr import pad_list
 from espnet.nets.st_interface import STInterface
-from espnet.utils.dataset import ChainerDataLoader
-from espnet.utils.dataset import TransformDataset
+from espnet.utils.dataset import ChainerDataLoader, TransformDataset
 from espnet.utils.deterministic_utils import set_deterministic_pytorch
 from espnet.utils.dynamic_import import dynamic_import
 from espnet.utils.io_utils import LoadInputsAndTargets
 from espnet.utils.training.batchfy import make_batchset
 from espnet.utils.training.iterators import ShufflingEnabler
 from espnet.utils.training.tensorboard_logger import TensorboardLogger
-from espnet.utils.training.train_utils import check_early_stop
-from espnet.utils.training.train_utils import set_early_stop
-
-from espnet.asr.pytorch_backend.asr import CustomConverter as ASRCustomConverter
-from espnet.asr.pytorch_backend.asr import CustomEvaluator
-from espnet.asr.pytorch_backend.asr import CustomUpdater
-
-import matplotlib
-
-matplotlib.use("Agg")
-
-if sys.version_info[0] == 2:
-    from itertools import izip_longest as zip_longest
-else:
-    from itertools import zip_longest as zip_longest
+from espnet.utils.training.train_utils import check_early_stop, set_early_stop
 
 
 class CustomConverter(ASRCustomConverter):
@@ -588,6 +574,8 @@ def train(args):
     set_early_stop(trainer, args)
 
     if args.tensorboard_dir is not None and args.tensorboard_dir != "":
+        from torch.utils.tensorboard import SummaryWriter
+
         trainer.extend(
             TensorboardLogger(
                 SummaryWriter(args.tensorboard_dir),
@@ -653,7 +641,7 @@ def trans(args):
 
         def grouper(n, iterable, fillvalue=None):
             kargs = [iter(iterable)] * n
-            return zip_longest(*kargs, fillvalue=fillvalue)
+            return itertools.zip_longest(*kargs, fillvalue=fillvalue)
 
         # sort data if batchsize > 1
         keys = list(js.keys())

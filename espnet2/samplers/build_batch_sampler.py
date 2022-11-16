@@ -1,10 +1,6 @@
-from typing import List
-from typing import Sequence
-from typing import Tuple
-from typing import Union
+from typing import List, Sequence, Tuple, Union
 
-from typeguard import check_argument_types
-from typeguard import check_return_type
+from typeguard import check_argument_types, check_return_type
 
 from espnet2.samplers.abs_sampler import AbsSampler
 from espnet2.samplers.folded_batch_sampler import FoldedBatchSampler
@@ -13,9 +9,8 @@ from espnet2.samplers.num_elements_batch_sampler import NumElementsBatchSampler
 from espnet2.samplers.sorted_batch_sampler import SortedBatchSampler
 from espnet2.samplers.unsorted_batch_sampler import UnsortedBatchSampler
 
-
 BATCH_TYPES = dict(
-    unsorted="UnsortedBatchSampler has nothing in paticular feature and "
+    unsorted="UnsortedBatchSampler has nothing in particular feature and "
     "just creates mini-batches which has constant batch_size. "
     "This sampler doesn't require any length "
     "information for each feature. "

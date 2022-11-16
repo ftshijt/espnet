@@ -1,8 +1,4 @@
-from typing import Any
-from typing import Dict
-from typing import Optional
-from typing import Tuple
-from typing import Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import humanfriendly
 import torch
@@ -14,7 +10,7 @@ from espnet2.tts.feats_extract.abs_feats_extract import AbsFeatsExtract
 
 
 class LogMelFbank(AbsFeatsExtract):
-    """Conventional frontend structure for ASR
+    """Conventional frontend structure for TTS.
 
     Stft -> amplitude-spec -> Log-Mel-Fbank
     """
@@ -33,6 +29,7 @@ class LogMelFbank(AbsFeatsExtract):
         fmin: Optional[int] = 80,
         fmax: Optional[int] = 7600,
         htk: bool = False,
+        log_base: Optional[float] = 10.0,
     ):
         assert check_argument_types()
         super().__init__()
@@ -65,7 +62,7 @@ class LogMelFbank(AbsFeatsExtract):
             fmin=fmin,
             fmax=fmax,
             htk=htk,
-            log_base=10.0,
+            log_base=log_base,
         )
 
     def output_size(self) -> int:

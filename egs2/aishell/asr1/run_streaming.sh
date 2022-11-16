@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Set bash to 'debug' mode, it will exit on :
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
 set -e
@@ -21,6 +21,7 @@ use_wordlm=false
 speed_perturb_factors="0.9 1.0 1.1"
 
 ./asr.sh                                               \
+    --use_streaming true                               \
     --lang zh                                          \
     --audio_format wav                                 \
     --feats_type raw                                   \

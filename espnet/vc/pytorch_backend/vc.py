@@ -17,37 +17,28 @@ import chainer
 import kaldiio
 import numpy as np
 import torch
-
 from chainer import training
 from chainer.training import extensions
 
-from espnet.asr.asr_utils import get_model_conf
-from espnet.asr.asr_utils import snapshot_object
-from espnet.asr.asr_utils import torch_load
-from espnet.asr.asr_utils import torch_resume
-from espnet.asr.asr_utils import torch_snapshot
+from espnet.asr.asr_utils import (
+    get_model_conf,
+    snapshot_object,
+    torch_load,
+    torch_resume,
+    torch_snapshot,
+)
 from espnet.asr.pytorch_backend.asr_init import load_trained_modules
 from espnet.nets.pytorch_backend.nets_utils import pad_list
 from espnet.nets.tts_interface import TTSInterface
-from espnet.utils.dataset import ChainerDataLoader
-from espnet.utils.dataset import TransformDataset
+from espnet.utils.dataset import ChainerDataLoader, TransformDataset
+from espnet.utils.deterministic_utils import set_deterministic_pytorch
 from espnet.utils.dynamic_import import dynamic_import
 from espnet.utils.io_utils import LoadInputsAndTargets
 from espnet.utils.training.batchfy import make_batchset
 from espnet.utils.training.evaluator import BaseEvaluator
-
-from espnet.utils.deterministic_utils import set_deterministic_pytorch
-from espnet.utils.training.train_utils import check_early_stop
-from espnet.utils.training.train_utils import set_early_stop
-
 from espnet.utils.training.iterators import ShufflingEnabler
-
-import matplotlib
-
 from espnet.utils.training.tensorboard_logger import TensorboardLogger
-from tensorboardX import SummaryWriter
-
-matplotlib.use("Agg")
+from espnet.utils.training.train_utils import check_early_stop, set_early_stop
 
 
 class CustomEvaluator(BaseEvaluator):
@@ -357,7 +348,10 @@ def train(args):
         from espnet.nets.pytorch_backend.transformer.optimizer import get_std_opt
 
         optimizer = get_std_opt(
-            model, args.adim, args.transformer_warmup_steps, args.transformer_lr
+            model.parameters(),
+            args.adim,
+            args.transformer_warmup_steps,
+            args.transformer_lr,
         )
     elif args.opt == "lamb":
         from pytorch_lamb import Lamb
@@ -546,6 +540,8 @@ def train(args):
 
     set_early_stop(trainer, args)
     if args.tensorboard_dir is not None and args.tensorboard_dir != "":
+        from torch.utils.tensorboard import SummaryWriter
+
         writer = SummaryWriter(args.tensorboard_dir)
         trainer.extend(TensorboardLogger(writer, att_reporter), trigger=report_interval)
 
@@ -608,6 +604,9 @@ def decode(args):
 
     # define function for plot prob and att_ws
     def _plot_and_save(array, figname, figsize=(6, 4), dpi=150):
+        import matplotlib
+
+        matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
         shape = array.shape

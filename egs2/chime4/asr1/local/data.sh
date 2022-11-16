@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -e
 set -u
@@ -52,13 +52,24 @@ if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
     local/clean_wsj0_data_prep.sh ${wsj0_data}
     local/clean_chime4_format_data.sh
 
+    # create data for 1ch and 2ch tracks
+    if [ ! -d ${CHIME4}/data/audio/16kHz/isolated_1ch_track ]; then
+        log "create data for 1ch tracks"
+        python local/sym_channel.py ${CHIME4} 1ch
+    fi
+    
+    if [ ! -d ${CHIME4}/data/audio/16kHz/isolated_2ch_track ]; then
+        log "create data for 2ch tracks"
+        python local/sym_channel.py ${CHIME4} 2ch
+    fi
+
     # beamforming for multich 
     local/run_beamform_2ch_track.sh --cmd "${train_cmd}" --nj 20 \
 	    ${CHIME4}/data/audio/16kHz/isolated_2ch_track enhan/beamformit_2mics
     local/run_beamform_6ch_track.sh --cmd "${train_cmd}" --nj 20 \
 	    ${CHIME4}/data/audio/16kHz/isolated_6ch_track enhan/beamformit_5mics
 
-    # prepartion for chime4 data
+    # preparation for chime4 data
     local/real_noisy_chime4_data_prep.sh ${CHIME4}
     local/simu_noisy_chime4_data_prep.sh ${CHIME4}
 
@@ -74,18 +85,24 @@ if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
     local/real_enhan_chime4_data_prep.sh beamformit_5mics ${PWD}/enhan/beamformit_5mics
     local/simu_enhan_chime4_data_prep.sh beamformit_5mics ${PWD}/enhan/beamformit_5mics
 
+    # prepare data for 6ch track:
+    #  (1) {tr05,dt05,et05}_simu_isolated_6ch_track
+    local/simu_ext_chime4_data_prep.sh --track 6 isolated_6ch_track ${PWD}/local/nn-gev/data/audio/16kHz
+    #  (2) {tr05,dt05,et05}_real_isolated_6ch_track
+    local/real_ext_chime4_data_prep.sh --track 6 isolated_6ch_track ${CHIME4}/data/audio/16kHz/isolated_6ch_track
+
     # Additionally use WSJ clean data. Otherwise the encoder decoder is not well trained
     local/wsj_data_prep.sh ${WSJ0}/??-{?,??}.? ${WSJ1}/??-{?,??}.?
     local/wsj_format_data.sh
 fi
 
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
-	log "combine real and simulation data"
-        
-	# TO DO:--extra-files but no utt2num_frames
-	utils/combine_data.sh data/tr05_multi_noisy data/tr05_simu_noisy data/tr05_real_noisy 
-	utils/combine_data.sh data/tr05_multi_noisy_si284 data/tr05_multi_noisy data/train_si284
-	utils/combine_data.sh data/${train_dev} data/dt05_simu_isolated_1ch_track data/dt05_real_isolated_1ch_track
+    log "combine real and simulation data"
+
+    # TO DO:--extra-files but no utt2num_frames
+    utils/combine_data.sh data/tr05_multi_noisy data/tr05_simu_noisy data/tr05_real_noisy 
+    utils/combine_data.sh data/tr05_multi_noisy_si284 data/tr05_multi_noisy data/train_si284
+    utils/combine_data.sh data/${train_dev} data/dt05_simu_isolated_1ch_track data/dt05_real_isolated_1ch_track
 fi
 
 other_text=data/local/other_text/text

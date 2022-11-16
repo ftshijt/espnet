@@ -1,15 +1,11 @@
-from datetime import datetime
-from io import BytesIO
-from io import TextIOWrapper
 import os
-from pathlib import Path
 import sys
 import tarfile
-from typing import Dict
-from typing import Iterable
-from typing import Optional
-from typing import Union
 import zipfile
+from datetime import datetime
+from io import BytesIO, TextIOWrapper
+from pathlib import Path
+from typing import Dict, Iterable, Optional, Union
 
 import yaml
 
@@ -279,7 +275,7 @@ def pack(
     try:
         import torch
 
-        meta_objs.update(torch=torch.__version__)
+        meta_objs.update(torch=str(torch.__version__))
     except ImportError:
         pass
     try:

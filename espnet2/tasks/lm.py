@@ -1,22 +1,17 @@
 import argparse
 import logging
-from typing import Callable
-from typing import Collection
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Tuple
+from typing import Callable, Collection, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
-from typeguard import check_argument_types
-from typeguard import check_return_type
+from typeguard import check_argument_types, check_return_type
 
 from espnet2.lm.abs_model import AbsLM
 from espnet2.lm.espnet_model import ESPnetLanguageModel
 from espnet2.lm.seq_rnn_lm import SequentialRNNLM
 from espnet2.lm.transformer_lm import TransformerLM
 from espnet2.tasks.abs_task import AbsTask
+from espnet2.text.phoneme_tokenizer import g2p_choices
 from espnet2.torch_utils.initialize import initialize
 from espnet2.train.class_choices import ClassChoices
 from espnet2.train.collate_fn import CommonCollateFn
@@ -24,9 +19,7 @@ from espnet2.train.preprocessor import CommonPreprocessor
 from espnet2.train.trainer import Trainer
 from espnet2.utils.get_default_kwargs import get_default_kwargs
 from espnet2.utils.nested_dict_action import NestedDictAction
-from espnet2.utils.types import str2bool
-from espnet2.utils.types import str_or_none
-
+from espnet2.utils.types import str2bool, str_or_none
 
 lm_choices = ClassChoices(
     "lm",
@@ -122,7 +115,7 @@ class LMTask(AbsTask):
         parser.add_argument(
             "--g2p",
             type=str_or_none,
-            choices=[None, "g2p_en", "pyopenjtalk", "pyopenjtalk_kana"],
+            choices=g2p_choices,
             default=None,
             help="Specify g2p method if --token_type=phn",
         )

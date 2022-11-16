@@ -9,21 +9,19 @@ import math
 import os
 
 import chainer
-from chainer import reporter
 import nltk
 import numpy as np
 import torch
+from chainer import reporter
 
 from espnet.nets.e2e_asr_common import label_smoothing_dist
 from espnet.nets.mt_interface import MTInterface
 from espnet.nets.pytorch_backend.initialization import uniform_init_parameters
-from espnet.nets.pytorch_backend.nets_utils import get_subsample
-from espnet.nets.pytorch_backend.nets_utils import pad_list
-from espnet.nets.pytorch_backend.nets_utils import to_device
-from espnet.nets.pytorch_backend.rnn.argument import (
-    add_arguments_rnn_encoder_common,  # noqa: H301
-    add_arguments_rnn_decoder_common,  # noqa: H301
-    add_arguments_rnn_attention_common,  # noqa: H301
+from espnet.nets.pytorch_backend.nets_utils import get_subsample, pad_list, to_device
+from espnet.nets.pytorch_backend.rnn.argument import (  # noqa: H301
+    add_arguments_rnn_attention_common,
+    add_arguments_rnn_decoder_common,
+    add_arguments_rnn_encoder_common,
 )
 from espnet.nets.pytorch_backend.rnn.attentions import att_for
 from espnet.nets.pytorch_backend.rnn.decoders import decoder_for
@@ -272,7 +270,7 @@ class E2E(MTInterface, torch.nn.Module):
         :rtype: torch.Tensor (B, 1)
         """
         if self.multilingual:
-            # remove language ID in the beggining
+            # remove language ID in the beginning
             tgt_lang_ids = ys_pad[:, 0].unsqueeze(1)
             xs_pad = xs_pad[:, 1:]  # remove source language IDs here
             ys_pad = ys_pad[:, 1:]

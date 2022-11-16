@@ -1,19 +1,20 @@
 # encoding: utf-8
 """Class Declaration of Transformer's Encoder."""
 
-import chainer
+import logging
 
+import chainer
+import numpy as np
 from chainer import links as L
 
 from espnet.nets.chainer_backend.transformer.embedding import PositionalEncoding
 from espnet.nets.chainer_backend.transformer.encoder_layer import EncoderLayer
 from espnet.nets.chainer_backend.transformer.layer_norm import LayerNorm
 from espnet.nets.chainer_backend.transformer.mask import make_history_mask
-from espnet.nets.chainer_backend.transformer.subsampling import Conv2dSubsampling
-from espnet.nets.chainer_backend.transformer.subsampling import LinearSampling
-
-import logging
-import numpy as np
+from espnet.nets.chainer_backend.transformer.subsampling import (
+    Conv2dSubsampling,
+    LinearSampling,
+)
 
 
 class Encoder(chainer.Chain):
@@ -105,7 +106,7 @@ class Encoder(chainer.Chain):
         """Compute Encoder layer.
 
         Args:
-            e (chainer.Variable): Batch of padded charactor. (B, Tmax)
+            e (chainer.Variable): Batch of padded character. (B, Tmax)
             ilens (chainer.Variable): Batch of length of each input batch. (B,)
 
         Returns:

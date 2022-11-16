@@ -1,6 +1,5 @@
 from pathlib import Path
-from typing import Iterable
-from typing import Union
+from typing import Iterable, Union
 
 from typeguard import check_argument_types
 
@@ -56,6 +55,7 @@ def build_tokenizer(
             space_symbol=space_symbol,
             remove_non_linguistic_symbols=remove_non_linguistic_symbols,
         )
+
     else:
         raise ValueError(
             f"token_mode must be one of bpe, word, char or phn: " f"{token_type}"

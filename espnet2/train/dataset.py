@@ -1,18 +1,11 @@
-from abc import ABC
-from abc import abstractmethod
 import collections
 import copy
 import functools
 import logging
 import numbers
 import re
-from typing import Any
-from typing import Callable
-from typing import Collection
-from typing import Dict
-from typing import Mapping
-from typing import Tuple
-from typing import Union
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Collection, Dict, Mapping, Tuple, Union
 
 import h5py
 import humanfriendly
@@ -20,16 +13,26 @@ import kaldiio
 import numpy as np
 import torch
 from torch.utils.data.dataset import Dataset
-from typeguard import check_argument_types
-from typeguard import check_return_type
+from typeguard import check_argument_types, check_return_type
 
 from espnet2.fileio.npy_scp import NpyScpReader
-from espnet2.fileio.rand_gen_dataset import FloatRandomGenerateDataset
-from espnet2.fileio.rand_gen_dataset import IntRandomGenerateDataset
-from espnet2.fileio.read_text import load_num_sequence_text
-from espnet2.fileio.read_text import read_2column_text
+from espnet2.fileio.rand_gen_dataset import (
+    FloatRandomGenerateDataset,
+    IntRandomGenerateDataset,
+)
+from espnet2.fileio.read_text import (
+    load_num_sequence_text,
+    read_2column_text,
+    read_label,
+)
+from espnet2.fileio.rttm import RttmReader
 from espnet2.fileio.sound_scp import SoundScpReader
 from espnet2.utils.sized_dict import SizedDict
+
+try:
+    from espnet2.fileio.xml_scp import XMLScpReader
+except ImportError or ModuleNotFoundError:
+    XMLScpReader = None  # cannot load XML reader, need instal Muskit
 
 
 class AdapterForSoundScpReader(collections.abc.Mapping):
@@ -56,7 +59,7 @@ class AdapterForSoundScpReader(collections.abc.Mapping):
             if isinstance(retval[0], int) and isinstance(retval[1], np.ndarray):
                 # sound scp case
                 rate, array = retval
-            elif isinstance(retval[0], int) and isinstance(retval[1], np.ndarray):
+            elif isinstance(retval[1], int) and isinstance(retval[0], np.ndarray):
                 # Extended ark format case
                 array, rate = retval
             else:
@@ -104,6 +107,80 @@ class H5FileWrapper:
         return value[()]
 
 
+class AdapterForXMLScpReader(collections.abc.Mapping):
+    def __init__(self, loader):
+        assert check_argument_types()
+        self.loader = loader
+
+    def keys(self):
+        return self.loader.keys()
+
+    def __len__(self):
+        return len(self.loader)
+
+    def __iter__(self):
+        return iter(self.loader)
+
+    def __getitem__(self, key: str) -> np.ndarray:
+        retval = self.loader[key]
+
+        assert len(retval) == 4, len(retval)
+        if (
+            isinstance(retval[0], list)
+            and isinstance(retval[1], np.ndarray)
+            and isinstance(retval[2], np.ndarray)
+            and isinstance(retval[3], float)
+        ):
+            lyrics, notes, segs, tempo = retval
+        else:
+            raise RuntimeError(
+                "Unexpected type: {}, {}, {}, {}".format(
+                    type(retval[0]),
+                    type(retval[1]),
+                    type(retval[2]),
+                    type(retval[3]),
+                )
+            )
+
+        assert (
+            isinstance(lyrics, list)
+            and isinstance(notes, np.ndarray)
+            and isinstance(segs, np.ndarray)
+            and isinstance(tempo, float)
+        )
+        return lyrics, notes, segs, tempo
+
+
+class AdapterForLabelScpReader(collections.abc.Mapping):
+    def __init__(self, loader):
+        assert check_argument_types()
+        self.loader = loader
+
+    def keys(self):
+        return self.loader.keys()
+
+    def __len__(self):
+        return len(self.loader)
+
+    def __iter__(self):
+        return iter(self.loader)
+
+    def __getitem__(self, key: str) -> np.ndarray:
+        retval = self.loader[key]
+
+        assert isinstance(retval, list)
+        seq_len = len(retval)
+        sample_time = np.zeros((seq_len, 2))
+        sample_label = []
+        for i in range(seq_len):
+            sample_time[i, 0] = np.float32(retval[i][0])
+            sample_time[i, 1] = np.float32(retval[i][1])
+            sample_label.append(retval[i][2])
+
+        assert isinstance(sample_time, np.ndarray) and isinstance(sample_label, list)
+        return sample_time, sample_label
+
+
 def sound_loader(path, float_dtype=None):
     # The file is as follows:
     #   utterance_id_A /some/where/a.wav
@@ -117,6 +194,33 @@ def sound_loader(path, float_dtype=None):
     # SoundScpReader.__getitem__() returns Tuple[int, ndarray],
     # but ndarray is desired, so Adapter class is inserted here
     return AdapterForSoundScpReader(loader, float_dtype)
+
+
+def xml_loader(path, float_dtype=None):
+    # The file is as follows:
+    #   utterance_id_A /some/where/a.mid
+    #   utterance_id_B /some/where/b.midi
+
+    assert XMLScpReader is not None, (
+        "Cannot load XMLScpReader. ",
+        "Please install Muskit modules via ",
+        "(cd tools && make muskit.done)",
+    )
+    loader = XMLScpReader(fname=path)
+
+    # MIDIScpReader.__getitem__() returns ndarray
+    return AdapterForXMLScpReader(loader)
+
+
+def label_loader(path, float_dtype=None):
+    # The file is as follows:
+    #   utterance_id_A /some/where/a.lab
+    #   utterance_id_B /some/where/b.lab
+
+    loader = read_label(path)
+
+    # XMLScpReader.__getitem__() returns ndarray
+    return AdapterForLabelScpReader(loader)
 
 
 def kaldi_loader(path, float_dtype=None, max_cache_fd: int = 0):
@@ -141,6 +245,25 @@ DATA_TYPES = {
         "\n\n"
         "   utterance_id_a a.wav\n"
         "   utterance_id_b b.wav\n"
+        "   ...",
+    ),
+    "midi": dict(
+        func=xml_loader,
+        kwargs=["float_dtype"],
+        help="MIDI format types which supported by sndfile mid, midi, etc."
+        "\n\n"
+        "   utterance_id_a a.mid\n"
+        "   utterance_id_b b.mid\n"
+        "   ...",
+    ),
+    "duration": dict(
+        func=label_loader,
+        kwargs=[],
+        help="Return text as is. The text must be converted to ndarray "
+        "by 'preprocess'."
+        "\n\n"
+        "   utterance_id_A start_1 end_1 phone_1 start_2 end_2 phone_2 ...\n"
+        "   utterance_id_B start_1 end_1 phone_1 start_2 end_2 phone_2 ...\n"
         "   ...",
     ),
     "kaldi_ark": dict(
@@ -239,6 +362,17 @@ DATA_TYPES = {
         "\n\n"
         "   utterance_id_A 3,4\n"
         "   utterance_id_B 10,4\n"
+        "   ...",
+    ),
+    "rttm": dict(
+        func=RttmReader,
+        kwargs=[],
+        help="rttm file loader, currently support for speaker diarization"
+        "\n\n"
+        "    SPEAKER file1 1 0 1023 <NA> <NA> spk1 <NA>"
+        "    SPEAKER file1 2 4000 3023 <NA> <NA> spk2 <NA>"
+        "    SPEAKER file1 3 500 4023 <NA> <NA> spk1 <NA>"
+        "    END     file1 <NA> 4023 <NA> <NA> <NA> <NA>"
         "   ...",
     ),
 }
@@ -349,7 +483,7 @@ class ESPnetDataset(AbsDataset):
                         name = func.__name__
                     else:
                         name = str(func)
-                    logging.error(f"An error happend with {name}({path})")
+                    logging.error(f"An error happened with {name}({path})")
                     raise
         else:
             raise RuntimeError(f"Not supported: loader_type={loader_type}")
@@ -388,13 +522,17 @@ class ESPnetDataset(AbsDataset):
         for name, loader in self.loader_dict.items():
             try:
                 value = loader[uid]
-                if isinstance(value, (list, tuple)):
+                # TODO(Yuning): svs returns tuple, remove "tuple" temporarily
+                if isinstance(value, (list)):
                     value = np.array(value)
                 if not isinstance(
-                    value, (np.ndarray, torch.Tensor, str, numbers.Number)
+                    value, (np.ndarray, torch.Tensor, str, numbers.Number, tuple)
                 ):
                     raise TypeError(
-                        f"Must be ndarray, torch.Tensor, str or Number: {type(value)}"
+                        (
+                            "Must be ndarray, torch.Tensor, "
+                            "str,  Number or tuple: {}".format(type(value))
+                        )
                     )
             except Exception:
                 path, _type = self.debug_info[name]

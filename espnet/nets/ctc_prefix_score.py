@@ -3,10 +3,9 @@
 # Copyright 2018 Mitsubishi Electric Research Labs (Takaaki Hori)
 #  Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)
 
-import torch
-
 import numpy as np
 import six
+import torch
 
 
 class CTCPrefixScoreTH(object):
@@ -161,7 +160,7 @@ class CTCPrefixScoreTH(object):
             )
             r[t] = torch.logsumexp(rr, 1) + x_[:, t]
 
-        # compute log prefix probabilites log(psi)
+        # compute log prefix probabilities log(psi)
         log_phi_x = torch.cat((log_phi[0].unsqueeze(0), log_phi[:-1]), dim=0) + x_[0]
         if scoring_ids is not None:
             log_psi = torch.full(
@@ -334,7 +333,7 @@ class CTCPrefixScore(object):
             log_phi = r_sum
 
         # compute forward probabilities log(r_t^n(h)), log(r_t^b(h)),
-        # and log prefix probabilites log(psi)
+        # and log prefix probabilities log(psi)
         start = max(output_length, 1)
         log_psi = r[start - 1, 0]
         for t in six.moves.range(start, self.input_length):

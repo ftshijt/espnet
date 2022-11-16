@@ -8,31 +8,31 @@ import copy
 import logging
 import math
 import os
-
-import editdistance
-import nltk
+from itertools import groupby
 
 import chainer
+import nltk
 import numpy as np
 import six
 import torch
-
-from itertools import groupby
-
 from chainer import reporter
 
 from espnet.nets.e2e_asr_common import label_smoothing_dist
 from espnet.nets.pytorch_backend.ctc import CTC
-from espnet.nets.pytorch_backend.initialization import lecun_normal_init_parameters
-from espnet.nets.pytorch_backend.initialization import set_forget_bias_to_one
-from espnet.nets.pytorch_backend.nets_utils import get_subsample
-from espnet.nets.pytorch_backend.nets_utils import pad_list
-from espnet.nets.pytorch_backend.nets_utils import to_device
-from espnet.nets.pytorch_backend.nets_utils import to_torch_tensor
-from espnet.nets.pytorch_backend.rnn.argument import (
-    add_arguments_rnn_encoder_common,  # noqa: H301
-    add_arguments_rnn_decoder_common,  # noqa: H301
-    add_arguments_rnn_attention_common,  # noqa: H301
+from espnet.nets.pytorch_backend.initialization import (
+    lecun_normal_init_parameters,
+    set_forget_bias_to_one,
+)
+from espnet.nets.pytorch_backend.nets_utils import (
+    get_subsample,
+    pad_list,
+    to_device,
+    to_torch_tensor,
+)
+from espnet.nets.pytorch_backend.rnn.argument import (  # noqa: H301
+    add_arguments_rnn_attention_common,
+    add_arguments_rnn_decoder_common,
+    add_arguments_rnn_encoder_common,
 )
 from espnet.nets.pytorch_backend.rnn.attentions import att_for
 from espnet.nets.pytorch_backend.rnn.decoders import decoder_for
@@ -207,7 +207,7 @@ class E2E(STInterface, torch.nn.Module):
             self.embed_mt = torch.nn.Embedding(odim, args.eunits, padding_idx=self.pad)
             self.dropout_mt = torch.nn.Dropout(p=args.dropout_rate)
             self.enc_mt = encoder_for(
-                args, args.eunits, subsample=np.ones(args.elayers + 1, dtype=np.int)
+                args, args.eunits, subsample=np.ones(args.elayers + 1, dtype=np.int64)
             )
 
         # weight initialization
@@ -290,7 +290,7 @@ class E2E(STInterface, torch.nn.Module):
         # 0. Extract target language ID
         if self.multilingual:
             tgt_lang_ids = ys_pad[:, 0:1]
-            ys_pad = ys_pad[:, 1:]  # remove target language ID in the beggining
+            ys_pad = ys_pad[:, 1:]  # remove target language ID in the beginning
         else:
             tgt_lang_ids = None
 
@@ -403,6 +403,8 @@ class E2E(STInterface, torch.nn.Module):
         :return: word error rate from attetion decoder prediction
         :rtype: float
         """
+        import editdistance
+
         loss_att, loss_ctc = 0.0, 0.0
         acc = None
         cer, wer = None, None
@@ -618,7 +620,7 @@ class E2E(STInterface, torch.nn.Module):
             # 1. Encoder
             if self.multilingual:
                 tgt_lang_ids = ys_pad[:, 0:1]
-                ys_pad = ys_pad[:, 1:]  # remove target language ID in the beggining
+                ys_pad = ys_pad[:, 1:]  # remove target language ID in the beginning
             else:
                 tgt_lang_ids = None
             hpad, hlens, _ = self.enc(xs_pad, ilens)

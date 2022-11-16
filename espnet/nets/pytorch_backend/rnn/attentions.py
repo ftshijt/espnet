@@ -1,13 +1,12 @@
 """Attention modules for RNN."""
 
 import math
-import six
 
+import six
 import torch
 import torch.nn.functional as F
 
-from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
-from espnet.nets.pytorch_backend.nets_utils import to_device
+from espnet.nets.pytorch_backend.nets_utils import make_pad_mask, to_device
 
 
 def _apply_attention_constraint(
@@ -305,7 +304,7 @@ class AttLoc(torch.nn.Module):
         backward_window=1,
         forward_window=3,
     ):
-        """Calcualte AttLoc forward propagation.
+        """Calculate AttLoc forward propagation.
 
         :param torch.Tensor enc_hs_pad: padded encoder hidden state (B x T_max x D_enc)
         :param list enc_hs_len: padded encoder hidden state length (B)

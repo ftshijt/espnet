@@ -1,19 +1,13 @@
 """Beam search module."""
 
-from itertools import chain
 import logging
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import NamedTuple
-from typing import Tuple
-from typing import Union
+from itertools import chain
+from typing import Any, Dict, List, NamedTuple, Tuple, Union
 
 import torch
 
 from espnet.nets.e2e_asr_common import end_detect
-from espnet.nets.scorer_interface import PartialScorerInterface
-from espnet.nets.scorer_interface import ScorerInterface
+from espnet.nets.scorer_interface import PartialScorerInterface, ScorerInterface
 
 
 class Hypothesis(NamedTuple):
@@ -343,6 +337,8 @@ class BeamSearch(torch.nn.Module):
             maxlenratio (float): Input length ratio to obtain max output length.
                 If maxlenratio=0.0 (default), it uses a end-detect function
                 to automatically find maximum hypothesis lengths
+                If maxlenratio<0.0, its absolute value is interpreted
+                as a constant max output length.
             minlenratio (float): Input length ratio to obtain min output length.
 
         Returns:
@@ -352,6 +348,8 @@ class BeamSearch(torch.nn.Module):
         # set length bounds
         if maxlenratio == 0:
             maxlen = x.shape[0]
+        elif maxlenratio < 0:
+            maxlen = -1 * int(maxlenratio)
         else:
             maxlen = max(1, int(maxlenratio * x.size(0)))
         minlen = int(minlenratio * x.size(0))

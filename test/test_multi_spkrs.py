@@ -5,11 +5,11 @@
 
 import argparse
 import importlib
-import numpy
 import re
-import torch
 
+import numpy
 import pytest
+import torch
 
 
 def make_arg(**kwargs):
@@ -37,7 +37,7 @@ def make_arg(**kwargs):
         bunits=300,
         char_list=["a", "i", "u", "e", "o"],
         context_residual=False,
-        ctc_type="warpctc",
+        ctc_type="builtin",
         ctc_weight=0.2,
         dlayers=1,
         dropout_rate=0.0,

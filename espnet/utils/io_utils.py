@@ -1,7 +1,7 @@
-from collections import OrderedDict
 import io
 import logging
 import os
+from collections import OrderedDict
 
 import h5py
 import kaldiio
@@ -208,7 +208,7 @@ class LoadInputsAndTargets(object):
         :return: batch, uttid_list
         :rtype: Tuple[OrderedDict, List[str]]
         """
-        # handle single-input and multi-input (paralell) asr mode
+        # handle single-input and multi-input (parallel) asr mode
         xs = list(x_feats_dict.values())
 
         if self.load_output:

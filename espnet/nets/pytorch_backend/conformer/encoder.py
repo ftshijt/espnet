@@ -5,6 +5,7 @@
 """Encoder definition."""
 
 import logging
+
 import torch
 
 from espnet.nets.pytorch_backend.conformer.convolution import ConvolutionModule
@@ -12,21 +13,23 @@ from espnet.nets.pytorch_backend.conformer.encoder_layer import EncoderLayer
 from espnet.nets.pytorch_backend.nets_utils import get_activation
 from espnet.nets.pytorch_backend.transducer.vgg2l import VGG2L
 from espnet.nets.pytorch_backend.transformer.attention import (
-    MultiHeadedAttention,  # noqa: H301
-    RelPositionMultiHeadedAttention,  # noqa: H301
-    LegacyRelPositionMultiHeadedAttention,  # noqa: H301
+    LegacyRelPositionMultiHeadedAttention,
+    MultiHeadedAttention,
+    RelPositionMultiHeadedAttention,
 )
 from espnet.nets.pytorch_backend.transformer.embedding import (
-    PositionalEncoding,  # noqa: H301
-    ScaledPositionalEncoding,  # noqa: H301
-    RelPositionalEncoding,  # noqa: H301
-    LegacyRelPositionalEncoding,  # noqa: H301
+    LegacyRelPositionalEncoding,
+    PositionalEncoding,
+    RelPositionalEncoding,
+    ScaledPositionalEncoding,
 )
 from espnet.nets.pytorch_backend.transformer.layer_norm import LayerNorm
-from espnet.nets.pytorch_backend.transformer.multi_layer_conv import Conv1dLinear
-from espnet.nets.pytorch_backend.transformer.multi_layer_conv import MultiLayeredConv1d
+from espnet.nets.pytorch_backend.transformer.multi_layer_conv import (
+    Conv1dLinear,
+    MultiLayeredConv1d,
+)
 from espnet.nets.pytorch_backend.transformer.positionwise_feed_forward import (
-    PositionwiseFeedForward,  # noqa: H301
+    PositionwiseFeedForward,
 )
 from espnet.nets.pytorch_backend.transformer.repeat import repeat
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling
@@ -37,7 +40,7 @@ class Encoder(torch.nn.Module):
 
     Args:
         idim (int): Input dimension.
-        attention_dim (int): Dimention of attention.
+        attention_dim (int): Dimension of attention.
         attention_heads (int): The number of heads of multi head attention.
         linear_units (int): The number of units of position-wise feed forward.
         num_blocks (int): The number of decoder blocks.
@@ -60,6 +63,11 @@ class Encoder(torch.nn.Module):
         zero_triu (bool): Whether to zero the upper triangular part of attention matrix.
         cnn_module_kernel (int): Kernerl size of convolution module.
         padding_idx (int): Padding idx for input_layer=embed.
+        stochastic_depth_rate (float): Maximum probability to skip the encoder layer.
+        intermediate_layers (Union[List[int], None]): indices of intermediate CTC layer.
+            indices start from 1.
+            if not None, intermediate outputs are returned (which changes return type
+            signature.)
 
     """
 
@@ -86,6 +94,10 @@ class Encoder(torch.nn.Module):
         zero_triu=False,
         cnn_module_kernel=31,
         padding_idx=-1,
+        stochastic_depth_rate=0.0,
+        intermediate_layers=None,
+        ctc_softmax=None,
+        conditioning_layer_dim=None,
     ):
         """Construct an Encoder object."""
         super(Encoder, self).__init__()
@@ -214,10 +226,19 @@ class Encoder(torch.nn.Module):
                 dropout_rate,
                 normalize_before,
                 concat_after,
+                stochastic_depth_rate * float(1 + lnum) / num_blocks,
             ),
         )
         if self.normalize_before:
             self.after_norm = LayerNorm(attention_dim)
+
+        self.intermediate_layers = intermediate_layers
+        self.use_conditioning = True if ctc_softmax is not None else False
+        if self.use_conditioning:
+            self.ctc_softmax = ctc_softmax
+            self.conditioning_layer = torch.nn.Linear(
+                conditioning_layer_dim, attention_dim
+            )
 
     def forward(self, xs, masks):
         """Encode input sequence.
@@ -236,10 +257,43 @@ class Encoder(torch.nn.Module):
         else:
             xs = self.embed(xs)
 
-        xs, masks = self.encoders(xs, masks)
+        if self.intermediate_layers is None:
+            xs, masks = self.encoders(xs, masks)
+        else:
+            intermediate_outputs = []
+            for layer_idx, encoder_layer in enumerate(self.encoders):
+                xs, masks = encoder_layer(xs, masks)
+
+                if (
+                    self.intermediate_layers is not None
+                    and layer_idx + 1 in self.intermediate_layers
+                ):
+                    # intermediate branches also require normalization.
+                    encoder_output = xs
+                    if isinstance(encoder_output, tuple):
+                        encoder_output = encoder_output[0]
+
+                    if self.normalize_before:
+                        encoder_output = self.after_norm(encoder_output)
+
+                    intermediate_outputs.append(encoder_output)
+
+                    if self.use_conditioning:
+                        intermediate_result = self.ctc_softmax(encoder_output)
+
+                        if isinstance(xs, tuple):
+                            x, pos_emb = xs[0], xs[1]
+                            x = x + self.conditioning_layer(intermediate_result)
+                            xs = (x, pos_emb)
+                        else:
+                            xs = xs + self.conditioning_layer(intermediate_result)
+
         if isinstance(xs, tuple):
             xs = xs[0]
 
         if self.normalize_before:
             xs = self.after_norm(xs)
+
+        if self.intermediate_layers is not None:
+            return xs, masks, intermediate_outputs
         return xs, masks

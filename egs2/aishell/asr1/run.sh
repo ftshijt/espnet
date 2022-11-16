@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Set bash to 'debug' mode, it will exit on :
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
 set -e
@@ -9,22 +9,25 @@ train_set=train
 valid_set=dev
 test_sets="dev test"
 
-asr_config=conf/train_asr_conformer.yaml
-inference_config=conf/decode_asr_rnn.yaml
+asr_config=conf/train_asr_branchformer.yaml
+inference_config=conf/decode_asr_branchformer.yaml
 
 lm_config=conf/train_lm_transformer.yaml
-use_lm=true
+use_lm=false
 use_wordlm=false
 
 # speed perturbation related
 # (train_set will be "${train_set}_sp" if speed_perturb_factors is specified)
 speed_perturb_factors="0.9 1.0 1.1"
 
-./asr.sh                                               \
-    --lang zh                                          \
-    --audio_format wav                                 \
-    --feats_type raw                                   \
-    --token_type char                                  \
+./asr.sh \
+    --nj 32 \
+    --inference_nj 32 \
+    --ngpu 4 \
+    --lang zh \
+    --audio_format "flac.ark" \
+    --feats_type raw \
+    --token_type char \
     --use_lm ${use_lm}                                 \
     --use_word_lm ${use_wordlm}                        \
     --lm_config "${lm_config}"                         \

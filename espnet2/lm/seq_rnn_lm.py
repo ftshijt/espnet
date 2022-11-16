@@ -1,6 +1,5 @@
 """Sequential implementation of Recurrent Neural Network Language Model."""
-from typing import Tuple
-from typing import Union
+from typing import Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -78,6 +77,17 @@ class SequentialRNNLM(AbsLM):
         self.rnn_type = rnn_type
         self.nhid = nhid
         self.nlayers = nlayers
+
+    def zero_state(self):
+        """Initialize LM state filled with zero values."""
+        if isinstance(self.rnn, torch.nn.LSTM):
+            h = torch.zeros((self.nlayers, self.nhid), dtype=torch.float)
+            c = torch.zeros((self.nlayers, self.nhid), dtype=torch.float)
+            state = h, c
+        else:
+            state = torch.zeros((self.nlayers, self.nhid), dtype=torch.float)
+
+        return state
 
     def forward(
         self, input: torch.Tensor, hidden: torch.Tensor

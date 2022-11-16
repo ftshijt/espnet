@@ -2,7 +2,9 @@
 
 """Initialize modules for espnet2 neural networks."""
 
+import logging
 import math
+
 import torch
 from typeguard import check_argument_types
 
@@ -23,11 +25,17 @@ def initialize(model: torch.nn.Module, init: str):
 
     if init == "chainer":
         # 1. lecun_normal_init_parameters
-        for p in model.parameters():
+        for name, p in model.named_parameters():
             data = p.data
-            if data.dim() == 1:
+            if ".bias" in name and data.dim() == 1:
                 # bias
                 data.zero_()
+                logging.info(f"Initialize {name} to zeros")
+            elif data.dim() == 1:
+                # linear weight
+                n = data.size(0)
+                stdv = 1.0 / math.sqrt(n)
+                data.normal_(0, stdv)
             elif data.dim() == 2:
                 # linear weight
                 n = data.size(1)
@@ -74,19 +82,40 @@ def initialize(model: torch.nn.Module, init: str):
                 else:
                     raise ValueError("Unknown initialization: " + init)
         # bias init
-        for p in model.parameters():
-            if p.dim() == 1:
+        for name, p in model.named_parameters():
+            if ".bias" in name and p.dim() == 1:
                 p.data.zero_()
+                logging.info(f"Initialize {name} to zeros")
 
         # reset some modules with default init
         for m in model.modules():
-            if isinstance(m, (torch.nn.Embedding, torch.nn.LayerNorm)):
+            if isinstance(
+                m, (torch.nn.Embedding, torch.nn.LayerNorm, torch.nn.GroupNorm)
+            ):
                 m.reset_parameters()
             if hasattr(m, "espnet_initialization_fn"):
                 m.espnet_initialization_fn()
 
-        # TODO(xkc): Hacking wav2vec2 initialization
+        # TODO(xkc): Hacking s3prl_frontend and wav2vec2encoder initialization
         if getattr(model, "encoder", None) and getattr(
             model.encoder, "reload_pretrained_parameters", None
         ):
             model.encoder.reload_pretrained_parameters()
+        if getattr(model, "frontend", None):
+            if getattr(model.frontend, "reload_pretrained_parameters", None):
+                model.frontend.reload_pretrained_parameters()
+            elif isinstance(
+                getattr(model.frontend, "frontends", None),
+                torch.nn.ModuleList,
+            ):
+                for i, _ in enumerate(getattr(model.frontend, "frontends")):
+                    if getattr(
+                        model.frontend.frontends[i],
+                        "reload_pretrained_parameters",
+                        None,
+                    ):
+                        model.frontend.frontends[i].reload_pretrained_parameters()
+        if getattr(model, "postencoder", None) and getattr(
+            model.postencoder, "reload_pretrained_parameters", None
+        ):
+            model.postencoder.reload_pretrained_parameters()

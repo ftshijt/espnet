@@ -1,11 +1,10 @@
 import logging
-import six
 
 import chainer
 import chainer.functions as F
 import chainer.links as L
 import numpy as np
-
+import six
 from chainer import cuda
 
 from espnet.nets.chainer_backend.nets_utils import _subsamplex
@@ -59,7 +58,7 @@ class RNNP(chainer.Chain):
         """RNNP forward.
 
         Args:
-            xs (chainer.Variable): Batch of padded charactor ids. (B, Tmax)
+            xs (chainer.Variable): Batch of padded character ids. (B, Tmax)
             ilens (chainer.Variable): Batch of length of each input batch. (B,)
 
         Returns:
@@ -122,7 +121,7 @@ class RNN(chainer.Chain):
         """BRNN forward propagation.
 
         Args:
-            xs (chainer.Variable): Batch of padded charactor ids. (B, Tmax)
+            xs (chainer.Variable): Batch of padded character ids. (B, Tmax)
             ilens (chainer.Variable): Batch of length of each input batch. (B,)
 
         Returns:
@@ -175,7 +174,7 @@ class VGG2L(chainer.Chain):
         """VGG2L forward propagation.
 
         Args:
-            xs (chainer.Variable): Batch of padded charactor ids. (B, Tmax)
+            xs (chainer.Variable): Batch of padded character ids. (B, Tmax)
             ilens (chainer.Variable): Batch of length of each features. (B,)
 
         Returns:
@@ -294,7 +293,7 @@ class Encoder(chainer.Chain):
         """Encoder forward.
 
         Args:
-            xs (chainer.Variable): Batch of padded charactor ids. (B, Tmax)
+            xs (chainer.Variable): Batch of padded character ids. (B, Tmax)
             ilens (chainer.variable): Batch of length of each features. (B,)
 
         Returns:

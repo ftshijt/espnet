@@ -2,9 +2,8 @@
 
 import numpy
 import torch
-from torch import nn
 import torch.nn.functional as F
-
+from torch import nn
 
 MIN_VALUE = float(numpy.finfo(numpy.float32).min)
 
@@ -75,7 +74,7 @@ class LightweightConvolution(nn.Module):
             mask (torch.Tensor): (batch, time1, time2) mask
 
         Return:
-            x (torch.Tensor): (batch, time1, d_model) ouput
+            x (torch.Tensor): (batch, time1, d_model) output
 
         """
         # linear -> GLU -> lightconv -> linear

@@ -10,7 +10,7 @@ import torch.nn.functional as F
 
 from espnet.nets.pytorch_backend.e2e_tts_tacotron2 import GuidedAttentionLoss
 from espnet.nets.pytorch_backend.e2e_tts_tacotron2 import (
-    Tacotron2Loss as TransformerLoss,  # noqa: H301
+    Tacotron2Loss as TransformerLoss,
 )
 from espnet.nets.pytorch_backend.nets_utils import make_non_pad_mask
 from espnet.nets.pytorch_backend.tacotron2.decoder import Postnet
@@ -18,8 +18,10 @@ from espnet.nets.pytorch_backend.tacotron2.decoder import Prenet as DecoderPrene
 from espnet.nets.pytorch_backend.tacotron2.encoder import Encoder as EncoderPrenet
 from espnet.nets.pytorch_backend.transformer.attention import MultiHeadedAttention
 from espnet.nets.pytorch_backend.transformer.decoder import Decoder
-from espnet.nets.pytorch_backend.transformer.embedding import PositionalEncoding
-from espnet.nets.pytorch_backend.transformer.embedding import ScaledPositionalEncoding
+from espnet.nets.pytorch_backend.transformer.embedding import (
+    PositionalEncoding,
+    ScaledPositionalEncoding,
+)
 from espnet.nets.pytorch_backend.transformer.encoder import Encoder
 from espnet.nets.pytorch_backend.transformer.initializer import initialize
 from espnet.nets.pytorch_backend.transformer.mask import subsequent_mask
@@ -45,8 +47,8 @@ class GuidedMultiHeadAttentionLoss(GuidedAttentionLoss):
         Args:
             att_ws (Tensor):
                 Batch of multi head attention weights (B, H, T_max_out, T_max_in).
-            ilens (LongTensor): Batch of input lenghts (B,).
-            olens (LongTensor): Batch of output lenghts (B,).
+            ilens (LongTensor): Batch of input lengths (B,).
+            olens (LongTensor): Batch of output lengths (B,).
 
         Returns:
             Tensor: Guided attention loss value.
@@ -93,8 +95,9 @@ else:
 
             """
             import matplotlib.pyplot as plt
-            from espnet.nets.pytorch_backend.transformer.plot import (
-                _plot_and_save_attention,  # noqa: H301
+
+            from espnet.nets.pytorch_backend.transformer.plot import (  # noqa: H301
+                _plot_and_save_attention,
             )
 
             for name, att_ws in attn_dict.items():
@@ -714,7 +717,7 @@ class Transformer(TTSInterface, torch.nn.Module):
             labels = labels[:, :max_olen]
 
         # forward encoder
-        x_masks = self._source_mask(ilens)
+        x_masks = self._source_mask(ilens).to(xs.device)
         hs, h_masks = self.encoder(xs, x_masks)
 
         # integrate speaker embedding
@@ -732,7 +735,7 @@ class Transformer(TTSInterface, torch.nn.Module):
         ys_in = self._add_first_frame_and_remove_last_frame(ys_in)
 
         # forward decoder
-        y_masks = self._target_mask(olens_in)
+        y_masks = self._target_mask(olens_in).to(xs.device)
         zs, _ = self.decoder(ys_in, y_masks, hs, h_masks)
         # (B, Lmax//r, odim * r) -> (B, Lmax//r * r, odim)
         before_outs = self.feat_out(zs).view(zs.size(0), -1, self.odim)
@@ -749,13 +752,18 @@ class Transformer(TTSInterface, torch.nn.Module):
 
         # modifiy mod part of groundtruth
         if self.reduction_factor > 1:
+            assert olens.ge(
+                self.reduction_factor
+            ).all(), "Output length must be greater than or equal to reduction factor."
             olens = olens.new([olen - olen % self.reduction_factor for olen in olens])
             max_olen = max(olens)
             ys = ys[:, :max_olen]
             labels = labels[:, :max_olen]
-            labels[:, -1] = 1.0  # make sure at least one frame has 1
+            labels = torch.scatter(
+                labels, 1, (olens - 1).unsqueeze(1), 1.0
+            )  # see #3388
 
-        # caluculate loss values
+        # calculate loss values
         l1_loss, l2_loss, bce_loss = self.criterion(
             after_outs, before_outs, logits, ys, labels, olens
         )
@@ -970,7 +978,7 @@ class Transformer(TTSInterface, torch.nn.Module):
         self.eval()
         with torch.no_grad():
             # forward encoder
-            x_masks = self._source_mask(ilens)
+            x_masks = self._source_mask(ilens).to(xs.device)
             hs, h_masks = self.encoder(xs, x_masks)
 
             # integrate speaker embedding
@@ -989,7 +997,7 @@ class Transformer(TTSInterface, torch.nn.Module):
             ys_in = self._add_first_frame_and_remove_last_frame(ys_in)
 
             # forward decoder
-            y_masks = self._target_mask(olens_in)
+            y_masks = self._target_mask(olens_in).to(xs.device)
             zs, _ = self.decoder(ys_in, y_masks, hs, h_masks)
 
             # calculate final outputs
@@ -1092,7 +1100,7 @@ class Transformer(TTSInterface, torch.nn.Module):
                     [[1, 1, 1, 0, 0]]], dtype=torch.uint8)
 
         """
-        x_masks = make_non_pad_mask(ilens).to(next(self.parameters()).device)
+        x_masks = make_non_pad_mask(ilens)
         return x_masks.unsqueeze(-2)
 
     def _target_mask(self, olens):
@@ -1121,7 +1129,7 @@ class Transformer(TTSInterface, torch.nn.Module):
                      [1, 1, 1, 0, 0]]], dtype=torch.uint8)
 
         """
-        y_masks = make_non_pad_mask(olens).to(next(self.parameters()).device)
+        y_masks = make_non_pad_mask(olens)
         s_masks = subsequent_mask(y_masks.size(-1), device=y_masks.device).unsqueeze(0)
         return y_masks.unsqueeze(-2) & s_masks
 

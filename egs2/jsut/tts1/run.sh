@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Set bash to 'debug' mode, it will exit on :
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
 set -e
@@ -42,6 +42,10 @@ g2p=pyopenjtalk
 # 4. Phoneme + Accent + Pause
 # (e.g. k 1 0 o 1 0 pau k 5 -4 o 5 -4 N 5 -3 n 5 -2 i 5 -2 ch 5 -1 i 5 -1 w 5 0 a 5 0)
 # g2p=pyopenjtalk_accent_with_pause
+
+# 5. Phoneme + Prosody symbols
+# (e.g. ^, k, #, o, _, k, o, [, N, n, i, ch, i, w, a, $)
+# g2p=pyopenjtalk_prosody
 
 ./tts.sh \
     --lang jp \

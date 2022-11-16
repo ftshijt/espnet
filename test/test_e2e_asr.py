@@ -9,20 +9,20 @@ import argparse
 import importlib
 import os
 import tempfile
+from test.utils_test import make_dummy_json
 
 import chainer
 import numpy as np
 import pytest
 import torch
 
-from espnet.asr import asr_utils
 import espnet.nets.chainer_backend.e2e_asr as ch_asr
 import espnet.nets.pytorch_backend.e2e_asr as th_asr
+from espnet.asr import asr_utils
 from espnet.nets.pytorch_backend.nets_utils import pad_list
 from espnet.nets.pytorch_backend.streaming.segment import SegmentStreamingE2E
 from espnet.nets.pytorch_backend.streaming.window import WindowStreamingE2E
 from espnet.utils.training.batchfy import make_batchset
-from test.utils_test import make_dummy_json
 
 
 def make_arg(**kwargs):
@@ -60,9 +60,9 @@ def make_arg(**kwargs):
         streaming_onset_margin=2,
         streaming_offset_margin=2,
         verbose=2,
-        char_list=[u"あ", u"い", u"う", u"え", u"お"],
+        char_list=["あ", "い", "う", "え", "お"],
         outdir=None,
-        ctc_type="warpctc",
+        ctc_type="builtin",
         report_cer=False,
         report_wer=False,
         sym_space="<space>",
@@ -320,7 +320,7 @@ def test_gradient_noise_injection(module):
         import espnet.nets.pytorch_backend.e2e_asr as m
     else:
         import espnet.nets.chainer_backend.e2e_asr as m
-    batchset = make_batchset(dummy_json, 2, 2 ** 10, 2 ** 10, shortest_first=True)
+    batchset = make_batchset(dummy_json, 2, 2**10, 2**10, shortest_first=True)
     model = m.E2E(10, 5, args)
     model_org = m.E2E(10, 5, args_org)
     for batch in batchset:
@@ -343,7 +343,7 @@ def test_sortagrad_trainable(module):
         import espnet.nets.pytorch_backend.e2e_asr as m
     else:
         import espnet.nets.chainer_backend.e2e_asr as m
-    batchset = make_batchset(dummy_json, 2, 2 ** 10, 2 ** 10, shortest_first=True)
+    batchset = make_batchset(dummy_json, 2, 2**10, 2**10, shortest_first=True)
     model = m.E2E(idim, odim, args)
     for batch in batchset:
         loss = model(*convert_batch(batch, module, idim=idim, odim=odim))
@@ -440,27 +440,6 @@ def init_chainer_weight_const(m, val):
     for p in m.params():
         if p.data.ndim > 1:
             p.data[:] = val
-
-
-def test_chainer_ctc_type():
-    np.random.seed(0)
-    batch = prepare_inputs("chainer")
-
-    def _propagate(ctc_type):
-        args = make_arg(ctc_type=ctc_type)
-        np.random.seed(0)
-        model = ch_asr.E2E(10, 5, args)
-        _, ch_ctc, _, _ = model(*batch)
-        ch_ctc.backward()
-        W_grad = model.ctc.ctc_lo.W.grad
-        b_grad = model.ctc.ctc_lo.b.grad
-        return ch_ctc.data, W_grad, b_grad
-
-    ref_loss, ref_W_grad, ref_b_grad = _propagate("builtin")
-    loss, W_grad, b_grad = _propagate("warpctc")
-    np.testing.assert_allclose(ref_loss, loss, rtol=1e-5)
-    np.testing.assert_allclose(ref_W_grad, W_grad)
-    np.testing.assert_allclose(ref_b_grad, b_grad)
 
 
 def test_loss_and_ctc_grad():
@@ -744,6 +723,7 @@ def test_multi_gpu_trainable(module):
         loss.backward(loss.new_ones(ngpu))  # trainable
     else:
         import copy
+
         import cupy
 
         losses = []

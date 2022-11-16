@@ -1,16 +1,14 @@
 import logging
 import random
-import six
+from argparse import Namespace
 
 import chainer
 import chainer.functions as F
 import chainer.links as L
 import numpy as np
+import six
 
 import espnet.nets.chainer_backend.deterministic_embed_id as DL
-
-from argparse import Namespace
-
 from espnet.nets.ctc_prefix_score import CTCPrefixScore
 from espnet.nets.e2e_asr_common import end_detect
 
@@ -32,7 +30,7 @@ class Decoder(chainer.Chain):
         att (Module): Attention module defined at
             `espnet.espnet.nets.chainer_backend.attentions`.
         verbose (int): Verbosity level.
-        char_list (List[str]): List of all charactors.
+        char_list (List[str]): List of all characters.
         labeldist (numpy.array): Distributed array of counted transcript length.
         lsm_weight (float): Weight to use when calculating the training loss.
         sampling_probability (float): Threshold for scheduled sampling.
@@ -225,7 +223,7 @@ class Decoder(chainer.Chain):
             h (chainer.Variable): One of the output from the encoder.
             lpz (chainer.Variable | None): Result of net propagation.
             recog_args (Namespace): The argument.
-            char_list (List[str]): List of all charactors.
+            char_list (List[str]): List of all characters.
             rnnlm (Module): RNNLM module. Defined at `espnet.lm.chainer_backend.lm`
 
         Returns:

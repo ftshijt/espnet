@@ -6,16 +6,15 @@ import contextlib
 import copy
 import logging
 import os
-from typing import Optional
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
+from filelock import FileLock
 from typeguard import check_argument_types
 
+from espnet2.asr.encoder.abs_encoder import AbsEncoder
 from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
 from espnet.nets.pytorch_backend.transformer.layer_norm import LayerNorm
-from espnet2.asr.encoder.abs_encoder import AbsEncoder
-from espnet2.asr.encoder.extract_features import patched_extract_features
 
 
 class FairSeqWav2Vec2Encoder(AbsEncoder):
@@ -27,7 +26,6 @@ class FairSeqWav2Vec2Encoder(AbsEncoder):
         w2v_url: url to Wav2Vec2.0 pretrained model
         w2v_dir_path: directory to download the Wav2Vec2.0 pretrained model.
         normalize_before: whether to use layer_norm before the first block
-        freeze_w2v: whether to freeze the Wav2Vec2.0 model during training
         finetune_last_n_layers: last n layers to be finetuned in Wav2Vec2.0
                                 0 means to finetune every layer if freeze_w2v=False.
     """
@@ -38,9 +36,7 @@ class FairSeqWav2Vec2Encoder(AbsEncoder):
         w2v_url: str,
         w2v_dir_path: str = "./",
         output_size: int = 256,
-        normalize_before: bool = True,
-        freeze_w2v: bool = True,
-        finetune_last_n_layers: int = 0,
+        normalize_before: bool = False,
         freeze_finetune_updates: int = 0,
     ):
         assert check_argument_types()
@@ -49,7 +45,6 @@ class FairSeqWav2Vec2Encoder(AbsEncoder):
         if w2v_url != "":
             try:
                 import fairseq
-                from fairseq.models.wav2vec.wav2vec2 import TransformerEncoder
                 from fairseq.models.wav2vec.wav2vec2 import Wav2Vec2Model
             except Exception as e:
                 print("Error: FairSeq is not properly installed.")
@@ -60,15 +55,9 @@ class FairSeqWav2Vec2Encoder(AbsEncoder):
 
         self.w2v_model_path = download_w2v(w2v_url, w2v_dir_path)
 
-        self.freeze_w2v = freeze_w2v
         self._output_size = output_size
-        self.finetune_last_n_layers = finetune_last_n_layers
 
-        assert (self.freeze_w2v) or (
-            self.finetune_last_n_layers > 0 and not self.freeze_w2v
-        ), "freeze_w2v need to be False when finetune_last_n_layers > 0."
-
-        models, saved_cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task(
+        models, _, _ = fairseq.checkpoint_utils.load_model_ensemble_and_task(
             [self.w2v_model_path],
             arg_overrides={"data": w2v_dir_path},
         )
@@ -83,13 +72,6 @@ class FairSeqWav2Vec2Encoder(AbsEncoder):
                     "'Wav2Vec2Model, Wav2VecCTC' classes, etc."
                 )
                 raise e
-
-        assert getattr(model.encoder, "finetune_last_n_layers", None) is None
-        setattr(model.encoder, "finetune_last_n_layers", finetune_last_n_layers)
-
-        model.encoder.extract_features = patched_extract_features.__get__(
-            model.encoder, TransformerEncoder
-        )
 
         self.encoders = model
 
@@ -130,8 +112,8 @@ class FairSeqWav2Vec2Encoder(AbsEncoder):
         """
         masks = make_pad_mask(ilens).to(xs_pad.device)
 
-        ft = not self.freeze_w2v and self.freeze_finetune_updates < self.num_updates
-        if not self.freeze_w2v and not ft:
+        ft = self.freeze_finetune_updates <= self.num_updates
+        if self.num_updates <= self.freeze_finetune_updates:
             self.num_updates += 1
         elif ft and self.num_updates == self.freeze_finetune_updates + 1:
             self.num_updates += 1
@@ -145,9 +127,12 @@ class FairSeqWav2Vec2Encoder(AbsEncoder):
             )
 
         xs_pad = enc_outputs["x"]  # (B,T,C),
-        masks = enc_outputs["padding_mask"]  # (B, T)
-
-        olens = (~masks).sum(dim=1)
+        bs = xs_pad.shape[0]
+        if enc_outputs["padding_mask"] is not None:
+            masks = enc_outputs["padding_mask"]  # (B, T)
+            olens = (~masks).sum(dim=1)  # (B)
+        else:
+            olens = torch.IntTensor([xs_pad.shape[1]]).repeat(bs).to(xs_pad.device)
 
         if self.output_layer is not None:
             xs_pad = self.output_layer(xs_pad)
@@ -162,19 +147,21 @@ class FairSeqWav2Vec2Encoder(AbsEncoder):
         logging.info("Pretrained Wav2Vec model parameters reloaded!")
 
 
-def download_w2v(url, dir_path):
+def download_w2v(model_url, dir_path):
     os.makedirs(dir_path, exist_ok=True)
-    model_name = url.split("/")[-1]
+
+    model_name = model_url.split("/")[-1]
     model_path = os.path.join(dir_path, model_name)
 
-    if not os.path.exists(model_path):
-        torch.hub.download_url_to_file(url, model_path)
-        torch.hub.download_url_to_file(
-            "https://dl.fbaipublicfiles.com/fairseq/wav2vec/dict.ltr.txt",
-            os.path.join(dir_path, "dict.ltr.txt"),
-        )
-        logging.info(f"Wav2Vec model downloaded {model_path}")
-    else:
-        logging.info(f"Wav2Vec model {model_path} already exists.")
+    dict_url = "https://dl.fbaipublicfiles.com/fairseq/wav2vec/dict.ltr.txt"
+    dict_path = os.path.join(dir_path, dict_url.split("/")[-1])
+
+    with FileLock(model_path + ".lock"):
+        if not os.path.exists(model_path):
+            torch.hub.download_url_to_file(model_url, model_path)
+            torch.hub.download_url_to_file(dict_url, dict_path)
+            logging.info(f"Wav2Vec model downloaded {model_path}")
+        else:
+            logging.info(f"Wav2Vec model {model_path} already exists.")
 
     return model_path

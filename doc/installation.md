@@ -32,14 +32,14 @@ the following packages are installed using Anaconda, so you can skip them.)
     # For CentOS
     $ sudo yum install libsndfile
     ```
-- ffmpeg (This is not required when installataion, but used in some recipes)
+- ffmpeg (This is not required when installing, but used in some recipes)
     ```sh
     # For Ubuntu
     $ sudo apt-get install ffmpeg
     # For CentOS
     $ sudo yum install ffmpeg
     ```
-- flac (This is not required when installataion, but used in some recipes)
+- flac (This is not required when installing, but used in some recipes)
     ```sh
     # For Ubuntu
     $ sudo apt-get install flac
@@ -50,11 +50,10 @@ the following packages are installed using Anaconda, so you can skip them.)
 ### Supported Linux distributions and other requirements
 
 We support the following Linux distributions with CI. If you want to build your own Linux by yourself,
-please also check our [CI configurations](https://github.com/espnet/espnet/blob/master/.circleci/config.yml).
+please also check our [CI configurations](https://github.com/espnet/espnet/tree/master/.github/workflows).
 to prepare the appropriate environments
 
 - ubuntu18
-- ubuntu16
 - centos7
 - debian9
 
@@ -203,14 +202,14 @@ We also have [prebuilt Kaldi binaries](https://github.com/espnet/espnet/blob/mas
 
     ```sh
     $ cd <espnet-root>/tools
-    $ make TH_VERSION=1.3.1
+    $ make TH_VERSION=1.10.1
     ```
     
     Note that the CUDA version is derived from `nvcc` command. If you'd like to specify the other CUDA version, you need to give `CUDA_VERSION`.
     
     ```sh
     $ cd <espnet-root>/tools
-    $ make TH_VERSION=1.3.1 CUDA_VERSION=10.1
+    $ make TH_VERSION=1.10.1 CUDA_VERSION=11.3
     ```
 
     If you don't have `nvcc` command, packages are installed for CPU mode by default.
@@ -228,13 +227,6 @@ so if you meet some installation error when running these recipe, you need to in
 
 e.g. 
 
-- To install Warp CTC
-    ```sh
-    cd <espnet-root>/tools
-    . activate_python.sh
-    . ./setup_cuda_env.sh <cuda-root>  # e.g. <cuda-root> = /usr/local/cuda
-    ./installers/install_warp-ctc.sh
-    ```
 - To install Warp Transducer
     ```sh
     cd <espnet-root>/tools
@@ -256,7 +248,7 @@ e.g.
     ```
 
 ### Check installation
-You can check whether your installation is succesfully finished by
+You can check whether your installation is successfully finished by
 ```sh
 cd <espnet-root>/tools
 . ./activate_python.sh; python3 check_install.py

@@ -1,9 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 if [ $# != 0 ]; then
     echo "Usage: $0"
     exit 1;
+fi
+unames="$(uname -s)"
+if [[ ! ${unames} =~ Linux && ! ${unames} =~ Darwin ]]; then
+    echo "Warning: This script may not work with ${unames}. Exit with doing nothing"
+    exit 0
 fi
 
 # Install festival
@@ -60,12 +65,9 @@ fi
 
 # Install phonemizer
 if [ ! -e phonemizer.done ]; then
-    rm -rf phonemizer
-    # NOTE(kan-bayashi): It is better to use fixed tag
-    git clone https://github.com/bootphon/phonemizer
     (
         set -euo pipefail
-        cd phonemizer && python3 -m pip install -e .
+        pip install phonemizer==3.0
     )
     touch phonemizer.done
 else

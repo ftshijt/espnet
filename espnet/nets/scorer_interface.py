@@ -1,11 +1,9 @@
 """Scorer interface module."""
 
-from typing import Any
-from typing import List
-from typing import Tuple
+import warnings
+from typing import Any, List, Tuple
 
 import torch
-import warnings
 
 
 class ScorerInterface:
@@ -132,7 +130,7 @@ class PartialScorerInterface(ScorerInterface):
     """Partial scorer interface for beam search.
 
     The partial scorer performs scoring when non-partial scorer finished scoring,
-    and recieves pre-pruned next tokens to score because it is too heavy to score
+    and receives pre-pruned next tokens to score because it is too heavy to score
     all the tokens.
 
     Examples:

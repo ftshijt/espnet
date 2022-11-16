@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright 2019 National Institute of Informatics (Hieu-Thi Luong)
 #  Apache 2.0 (http://www.apache.org/licenses/LICENSE-2.0)
@@ -42,7 +42,7 @@ use_valbest_average=false
 # data
 datadir=./downloads
 vivos_root=${datadir}/vivos
-data_url=https://ailab.hcmus.edu.vn/assets/vivos.tar.gz
+data_url=https://zenodo.org/api/files/a3a96378-5e63-4bf3-8fa6-fe2bebc871c7/vivos.tar.gz
 
 # exp tag
 tag=""

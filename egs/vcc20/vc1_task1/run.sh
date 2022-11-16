@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright 2020 Nagoya University (Wen-Chin Huang)
 #  Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)
@@ -126,7 +126,7 @@ feat_dt_dir=${dumpdir}/${dev_set}; mkdir -p ${feat_dt_dir}
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     echo "stage 1: Feature Generation"
 
-    # Trim silence parts at the begining and the end of audio
+    # Trim silence parts at the beginning and the end of audio
     mkdir -p exp/trim_silence/${org_set}/figs  # avoid error
     trim_silence.sh --cmd "${train_cmd}" \
         --fs ${fs} \

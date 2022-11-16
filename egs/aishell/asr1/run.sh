@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright 2017 Johns Hopkins University (Shinji Watanabe)
 #  Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)
@@ -241,6 +241,15 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
         		       --out ${expdir}/results/${recog_model} \
         		       --num ${n_average}
     fi
+
+    if [[ $(get_yaml.py ${train_config} model-module) = *transducer* ]]; then
+        echo "[info]: transducer model does not support '--api v2'" \
+             "(hence ngram is ignored)"
+        recog_v2_opts=""
+    else
+        recog_v2_opts="--ngram-model ${ngramexpdir}/${n_gram}gram.bin --api v2"
+    fi
+
     pids=() # initialize pids
     for rtask in ${recog_set}; do
     (
@@ -263,8 +272,7 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
             --result-label ${expdir}/${decode_dir}/data.JOB.json \
             --model ${expdir}/results/${recog_model}  \
             --rnnlm ${lmexpdir}/rnnlm.model.best \
-            --ngram-model ${ngramexpdir}/${n_gram}gram.bin \
-            --api v2
+            ${recog_v2_opts}
 
         score_sclite.sh ${expdir}/${decode_dir} ${dict}
 

@@ -1,10 +1,10 @@
-from distutils.version import LooseVersion
 import logging
 
 import numpy as np
 import six
 import torch
 import torch.nn.functional as F
+from packaging.version import parse as V
 
 from espnet.nets.pytorch_backend.nets_utils import to_device
 
@@ -15,29 +15,20 @@ class CTC(torch.nn.Module):
     :param int odim: dimension of outputs
     :param int eprojs: number of encoder projection units
     :param float dropout_rate: dropout rate (0.0 ~ 1.0)
-    :param str ctc_type: builtin or warpctc
+    :param str ctc_type: builtin
     :param bool reduce: reduce the CTC loss into a scalar
     """
 
-    def __init__(self, odim, eprojs, dropout_rate, ctc_type="warpctc", reduce=True):
+    def __init__(self, odim, eprojs, dropout_rate, ctc_type="builtin", reduce=True):
         super().__init__()
         self.dropout_rate = dropout_rate
         self.loss = None
         self.ctc_lo = torch.nn.Linear(eprojs, odim)
+        self.dropout = torch.nn.Dropout(dropout_rate)
         self.probs = None  # for visualization
 
         # In case of Pytorch >= 1.7.0, CTC will be always builtin
-        self.ctc_type = (
-            ctc_type
-            if LooseVersion(torch.__version__) < LooseVersion("1.7.0")
-            else "builtin"
-        )
-
-        # ctc_type = buitin not support Pytorch=1.0.1
-        if self.ctc_type == "builtin" and (
-            LooseVersion(torch.__version__) < LooseVersion("1.1.0")
-        ):
-            self.ctc_type = "cudnnctc"
+        self.ctc_type = ctc_type if V(torch.__version__) < V("1.7.0") else "builtin"
 
         if ctc_type != self.ctc_type:
             logging.warning(f"CTC was set to {self.ctc_type} due to PyTorch version.")
@@ -50,17 +41,13 @@ class CTC(torch.nn.Module):
         elif self.ctc_type == "cudnnctc":
             reduction_type = "sum" if reduce else "none"
             self.ctc_loss = torch.nn.CTCLoss(reduction=reduction_type)
-        elif self.ctc_type == "warpctc":
-            import warpctc_pytorch as warp_ctc
-
-            self.ctc_loss = warp_ctc.CTCLoss(size_average=True, reduce=reduce)
         elif self.ctc_type == "gtnctc":
             from espnet.nets.pytorch_backend.gtn_ctc import GTNCTCLossFunction
 
             self.ctc_loss = GTNCTCLossFunction.apply
         else:
             raise ValueError(
-                'ctc_type must be "builtin" or "warpctc": {}'.format(self.ctc_type)
+                'ctc_type must be "builtin" or "gtnctc": {}'.format(self.ctc_type)
             )
 
         self.ignore_id = -1
@@ -76,12 +63,10 @@ class CTC(torch.nn.Module):
             # Batch-size average
             loss = loss / th_pred.size(1)
             return loss
-        elif self.ctc_type == "warpctc":
-            return self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
         elif self.ctc_type == "gtnctc":
             targets = [t.tolist() for t in th_target]
             log_probs = torch.nn.functional.log_softmax(th_pred, dim=2)
-            return self.ctc_loss(log_probs, targets, 0, "none")
+            return self.ctc_loss(log_probs, targets, th_ilen, 0, "none")
         else:
             raise NotImplementedError
 
@@ -99,7 +84,7 @@ class CTC(torch.nn.Module):
         ys = [y[y != self.ignore_id] for y in ys_pad]  # parse padded ys
 
         # zero padding for hs
-        ys_hat = self.ctc_lo(F.dropout(hs_pad, p=self.dropout_rate))
+        ys_hat = self.ctc_lo(self.dropout(hs_pad))
         if self.ctc_type != "gtnctc":
             ys_hat = ys_hat.transpose(0, 1)
 
@@ -119,10 +104,6 @@ class CTC(torch.nn.Module):
             # get ctc loss
             # expected shape of seqLength x batchSize x alphabet_size
             dtype = ys_hat.dtype
-            if self.ctc_type == "warpctc" or dtype == torch.float16:
-                # warpctc only supports float32
-                # torch.ctc does not support float16 (#1751)
-                ys_hat = ys_hat.to(dtype=torch.float32)
             if self.ctc_type == "cudnnctc":
                 # use GPU when using the cuDNN implementation
                 ys_true = to_device(hs_pad, ys_true)
@@ -146,9 +127,6 @@ class CTC(torch.nn.Module):
         )
 
         if self.reduce:
-            # NOTE: sum() is needed to keep consistency
-            # since warpctc return as tensor w/ shape (1,)
-            # but builtin return as tensor w/o shape (scalar).
             self.loss = self.loss.sum()
             logging.info("ctc loss:" + str(float(self.loss)))
 
