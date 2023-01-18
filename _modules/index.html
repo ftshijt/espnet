@@ -168,8 +168,7 @@
            <div itemprop="articleBody">
              
   <h1>All modules for which code is available</h1>
-<ul><li><a href="ctc_segmentation/ctc_segmentation.html">ctc_segmentation.ctc_segmentation</a></li>
-<li><a href="espnet/asr/asr_mix_utils.html">espnet.asr.asr_mix_utils</a></li>
+<ul><li><a href="espnet/asr/asr_mix_utils.html">espnet.asr.asr_mix_utils</a></li>
 <li><a href="espnet/asr/asr_utils.html">espnet.asr.asr_utils</a></li>
 <li><a href="espnet/asr/chainer_backend/asr.html">espnet.asr.chainer_backend.asr</a></li>
 <li><a href="espnet/asr/pytorch_backend/asr.html">espnet.asr.pytorch_backend.asr</a></li>
@@ -370,8 +369,10 @@
 <li><a href="espnet2/asr/decoder/hugging_face_transformers_decoder.html">espnet2.asr.decoder.hugging_face_transformers_decoder</a></li>
 <li><a href="espnet2/asr/decoder/mlm_decoder.html">espnet2.asr.decoder.mlm_decoder</a></li>
 <li><a href="espnet2/asr/decoder/rnn_decoder.html">espnet2.asr.decoder.rnn_decoder</a></li>
+<li><a href="espnet2/asr/decoder/s4_decoder.html">espnet2.asr.decoder.s4_decoder</a></li>
 <li><a href="espnet2/asr/decoder/transducer_decoder.html">espnet2.asr.decoder.transducer_decoder</a></li>
 <li><a href="espnet2/asr/decoder/transformer_decoder.html">espnet2.asr.decoder.transformer_decoder</a></li>
+<li><a href="espnet2/asr/decoder/whisper_decoder.html">espnet2.asr.decoder.whisper_decoder</a></li>
 <li><a href="espnet2/asr/encoder/abs_encoder.html">espnet2.asr.encoder.abs_encoder</a></li>
 <li><a href="espnet2/asr/encoder/branchformer_encoder.html">espnet2.asr.encoder.branchformer_encoder</a></li>
 <li><a href="espnet2/asr/encoder/conformer_encoder.html">espnet2.asr.encoder.conformer_encoder</a></li>
@@ -385,11 +386,13 @@
 <li><a href="espnet2/asr/encoder/transformer_encoder_multispkr.html">espnet2.asr.encoder.transformer_encoder_multispkr</a></li>
 <li><a href="espnet2/asr/encoder/vgg_rnn_encoder.html">espnet2.asr.encoder.vgg_rnn_encoder</a></li>
 <li><a href="espnet2/asr/encoder/wav2vec2_encoder.html">espnet2.asr.encoder.wav2vec2_encoder</a></li>
+<li><a href="espnet2/asr/encoder/whisper_encoder.html">espnet2.asr.encoder.whisper_encoder</a></li>
 <li><a href="espnet2/asr/espnet_model.html">espnet2.asr.espnet_model</a></li>
 <li><a href="espnet2/asr/frontend/abs_frontend.html">espnet2.asr.frontend.abs_frontend</a></li>
 <li><a href="espnet2/asr/frontend/default.html">espnet2.asr.frontend.default</a></li>
 <li><a href="espnet2/asr/frontend/fused.html">espnet2.asr.frontend.fused</a></li>
 <li><a href="espnet2/asr/frontend/s3prl.html">espnet2.asr.frontend.s3prl</a></li>
+<li><a href="espnet2/asr/frontend/whisper.html">espnet2.asr.frontend.whisper</a></li>
 <li><a href="espnet2/asr/frontend/windowing.html">espnet2.asr.frontend.windowing</a></li>
 <li><a href="espnet2/asr/layers/cgmlp.html">espnet2.asr.layers.cgmlp</a></li>
 <li><a href="espnet2/asr/layers/fastformer.html">espnet2.asr.layers.fastformer</a></li>
@@ -402,6 +405,16 @@
 <li><a href="espnet2/asr/preencoder/sinc.html">espnet2.asr.preencoder.sinc</a></li>
 <li><a href="espnet2/asr/specaug/abs_specaug.html">espnet2.asr.specaug.abs_specaug</a></li>
 <li><a href="espnet2/asr/specaug/specaug.html">espnet2.asr.specaug.specaug</a></li>
+<li><a href="espnet2/asr/state_spaces/attention.html">espnet2.asr.state_spaces.attention</a></li>
+<li><a href="espnet2/asr/state_spaces/base.html">espnet2.asr.state_spaces.base</a></li>
+<li><a href="espnet2/asr/state_spaces/block.html">espnet2.asr.state_spaces.block</a></li>
+<li><a href="espnet2/asr/state_spaces/components.html">espnet2.asr.state_spaces.components</a></li>
+<li><a href="espnet2/asr/state_spaces/ff.html">espnet2.asr.state_spaces.ff</a></li>
+<li><a href="espnet2/asr/state_spaces/model.html">espnet2.asr.state_spaces.model</a></li>
+<li><a href="espnet2/asr/state_spaces/pool.html">espnet2.asr.state_spaces.pool</a></li>
+<li><a href="espnet2/asr/state_spaces/residual.html">espnet2.asr.state_spaces.residual</a></li>
+<li><a href="espnet2/asr/state_spaces/s4.html">espnet2.asr.state_spaces.s4</a></li>
+<li><a href="espnet2/asr/state_spaces/utils.html">espnet2.asr.state_spaces.utils</a></li>
 <li><a href="espnet2/asr/transducer/beam_search_transducer.html">espnet2.asr.transducer.beam_search_transducer</a></li>
 <li><a href="espnet2/asr/transducer/error_calculator.html">espnet2.asr.transducer.error_calculator</a></li>
 <li><a href="espnet2/asr_transducer/activation.html">espnet2.asr_transducer.activation</a></li>
@@ -426,17 +439,9 @@
 <li><a href="espnet2/asr_transducer/joint_network.html">espnet2.asr_transducer.joint_network</a></li>
 <li><a href="espnet2/asr_transducer/utils.html">espnet2.asr_transducer.utils</a></li>
 <li><a href="espnet2/bin/aggregate_stats_dirs.html">espnet2.bin.aggregate_stats_dirs</a></li>
-<li><a href="espnet2/bin/asr_align.html">espnet2.bin.asr_align</a></li>
-<li><a href="espnet2/bin/asr_inference.html">espnet2.bin.asr_inference</a></li>
-<li><a href="espnet2/bin/asr_inference_maskctc.html">espnet2.bin.asr_inference_maskctc</a></li>
-<li><a href="espnet2/bin/asr_inference_streaming.html">espnet2.bin.asr_inference_streaming</a></li>
-<li><a href="espnet2/bin/asr_train.html">espnet2.bin.asr_train</a></li>
 <li><a href="espnet2/bin/asr_transducer_inference.html">espnet2.bin.asr_transducer_inference</a></li>
 <li><a href="espnet2/bin/asr_transducer_train.html">espnet2.bin.asr_transducer_train</a></li>
-<li><a href="espnet2/bin/diar_inference.html">espnet2.bin.diar_inference</a></li>
 <li><a href="espnet2/bin/diar_train.html">espnet2.bin.diar_train</a></li>
-<li><a href="espnet2/bin/enh_inference.html">espnet2.bin.enh_inference</a></li>
-<li><a href="espnet2/bin/enh_s2t_train.html">espnet2.bin.enh_s2t_train</a></li>
 <li><a href="espnet2/bin/enh_scoring.html">espnet2.bin.enh_scoring</a></li>
 <li><a href="espnet2/bin/enh_train.html">espnet2.bin.enh_train</a></li>
 <li><a href="espnet2/bin/enh_tse_inference.html">espnet2.bin.enh_tse_inference</a></li>
@@ -451,10 +456,7 @@
 <li><a href="espnet2/bin/mt_inference.html">espnet2.bin.mt_inference</a></li>
 <li><a href="espnet2/bin/mt_train.html">espnet2.bin.mt_train</a></li>
 <li><a href="espnet2/bin/pack.html">espnet2.bin.pack</a></li>
-<li><a href="espnet2/bin/slu_inference.html">espnet2.bin.slu_inference</a></li>
-<li><a href="espnet2/bin/slu_train.html">espnet2.bin.slu_train</a></li>
 <li><a href="espnet2/bin/split_scps.html">espnet2.bin.split_scps</a></li>
-<li><a href="espnet2/bin/st_inference.html">espnet2.bin.st_inference</a></li>
 <li><a href="espnet2/bin/st_inference_streaming.html">espnet2.bin.st_inference_streaming</a></li>
 <li><a href="espnet2/bin/st_train.html">espnet2.bin.st_train</a></li>
 <li><a href="espnet2/bin/svs_inference.html">espnet2.bin.svs_inference</a></li>
@@ -462,6 +464,7 @@
 <li><a href="espnet2/bin/tokenize_text.html">espnet2.bin.tokenize_text</a></li>
 <li><a href="espnet2/bin/tts_inference.html">espnet2.bin.tts_inference</a></li>
 <li><a href="espnet2/bin/tts_train.html">espnet2.bin.tts_train</a></li>
+<li><a href="espnet2/bin/whisper_export_vocabulary.html">espnet2.bin.whisper_export_vocabulary</a></li>
 <li><a href="espnet2/diar/abs_diar.html">espnet2.diar.abs_diar</a></li>
 <li><a href="espnet2/diar/attractor/abs_attractor.html">espnet2.diar.attractor.abs_attractor</a></li>
 <li><a href="espnet2/diar/attractor/rnn_attractor.html">espnet2.diar.attractor.rnn_attractor</a></li>
@@ -608,6 +611,7 @@
 <li><a href="espnet2/main_funcs/pack_funcs.html">espnet2.main_funcs.pack_funcs</a></li>
 <li><a href="espnet2/mt/espnet_model.html">espnet2.mt.espnet_model</a></li>
 <li><a href="espnet2/mt/frontend/embedding.html">espnet2.mt.frontend.embedding</a></li>
+<li><a href="espnet2/optimizers/optim_groups.html">espnet2.optimizers.optim_groups</a></li>
 <li><a href="espnet2/optimizers/sgd.html">espnet2.optimizers.sgd</a></li>
 <li><a href="espnet2/samplers/abs_sampler.html">espnet2.samplers.abs_sampler</a></li>
 <li><a href="espnet2/samplers/build_batch_sampler.html">espnet2.samplers.build_batch_sampler</a></li>
@@ -633,18 +637,15 @@
 <li><a href="espnet2/svs/naive_rnn/naive_rnn_dp.html">espnet2.svs.naive_rnn.naive_rnn_dp</a></li>
 <li><a href="espnet2/svs/xiaoice/XiaoiceSing.html">espnet2.svs.xiaoice.XiaoiceSing</a></li>
 <li><a href="espnet2/tasks/abs_task.html">espnet2.tasks.abs_task</a></li>
-<li><a href="espnet2/tasks/asr.html">espnet2.tasks.asr</a></li>
 <li><a href="espnet2/tasks/asr_transducer.html">espnet2.tasks.asr_transducer</a></li>
 <li><a href="espnet2/tasks/diar.html">espnet2.tasks.diar</a></li>
 <li><a href="espnet2/tasks/enh.html">espnet2.tasks.enh</a></li>
-<li><a href="espnet2/tasks/enh_s2t.html">espnet2.tasks.enh_s2t</a></li>
 <li><a href="espnet2/tasks/enh_tse.html">espnet2.tasks.enh_tse</a></li>
 <li><a href="espnet2/tasks/gan_svs.html">espnet2.tasks.gan_svs</a></li>
 <li><a href="espnet2/tasks/gan_tts.html">espnet2.tasks.gan_tts</a></li>
 <li><a href="espnet2/tasks/hubert.html">espnet2.tasks.hubert</a></li>
 <li><a href="espnet2/tasks/lm.html">espnet2.tasks.lm</a></li>
 <li><a href="espnet2/tasks/mt.html">espnet2.tasks.mt</a></li>
-<li><a href="espnet2/tasks/slu.html">espnet2.tasks.slu</a></li>
 <li><a href="espnet2/tasks/st.html">espnet2.tasks.st</a></li>
 <li><a href="espnet2/tasks/svs.html">espnet2.tasks.svs</a></li>
 <li><a href="espnet2/tasks/tts.html">espnet2.tasks.tts</a></li>
@@ -657,6 +658,8 @@
 <li><a href="espnet2/text/phoneme_tokenizer.html">espnet2.text.phoneme_tokenizer</a></li>
 <li><a href="espnet2/text/sentencepiece_tokenizer.html">espnet2.text.sentencepiece_tokenizer</a></li>
 <li><a href="espnet2/text/token_id_converter.html">espnet2.text.token_id_converter</a></li>
+<li><a href="espnet2/text/whisper_token_id_converter.html">espnet2.text.whisper_token_id_converter</a></li>
+<li><a href="espnet2/text/whisper_tokenizer.html">espnet2.text.whisper_tokenizer</a></li>
 <li><a href="espnet2/text/word_tokenizer.html">espnet2.text.word_tokenizer</a></li>
 <li><a href="espnet2/torch_utils/add_gradient_noise.html">espnet2.torch_utils.add_gradient_noise</a></li>
 <li><a href="espnet2/torch_utils/device_funcs.html">espnet2.torch_utils.device_funcs</a></li>
@@ -705,6 +708,7 @@
 <li><a href="espnet2/utils/sized_dict.html">espnet2.utils.sized_dict</a></li>
 <li><a href="espnet2/utils/types.html">espnet2.utils.types</a></li>
 <li><a href="espnet2/utils/yaml_no_alias_safe_dump.html">espnet2.utils.yaml_no_alias_safe_dump</a></li>
+<li><a href="logging.html">logging</a></li>
 </ul>
 
            </div>
