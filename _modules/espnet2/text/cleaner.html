@@ -59,6 +59,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../notebook/asr_cli.html">Speech Recognition (Recipe)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../notebook/asr_library.html">Speech Recognition (Library)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebook/espnet2_2pass_slu_demo.html">ESPNET 2 pass SLU Demonstration</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../notebook/espnet2_asr_realtime_demo.html">ESPnet2-ASR realtime demonstration</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../notebook/espnet2_asr_transfer_learning_demo.html"><strong>Use transfer learning for ASR in ESPnet2</strong></a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../notebook/espnet2_asr_transfer_learning_demo.html#Abstract">Abstract</a></li>
@@ -185,7 +186,7 @@
 
 <span class="k">try</span><span class="p">:</span>
     <span class="kn">from</span> <span class="nn">whisper.normalizers</span> <span class="kn">import</span> <span class="n">BasicTextNormalizer</span><span class="p">,</span> <span class="n">EnglishTextNormalizer</span>
-<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+<span class="k">except</span> <span class="p">(</span><span class="ne">ImportError</span><span class="p">,</span> <span class="ne">SyntaxError</span><span class="p">):</span>
     <span class="n">BasicTextNormalizer</span> <span class="o">=</span> <span class="kc">None</span>
 
 
