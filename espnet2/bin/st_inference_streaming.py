@@ -27,6 +27,8 @@ from espnet2.utils import config_argparse
 from espnet2.utils.types import str2bool, str2triple_str, str_or_none
 from espnet.nets.batch_beam_search_online import BatchBeamSearchOnline
 from espnet.nets.beam_search import Hypothesis
+# from espnet.nets.beam_search_timesync import BeamSearchTimeSync
+from espnet.nets.scorers.ctc import CTCPrefixScorer
 from espnet.nets.pytorch_backend.transformer.subsampling import TooShortUttError
 from espnet.nets.scorer_interface import BatchScorerInterface
 from espnet.nets.scorers.length_bonus import LengthBonus
@@ -62,12 +64,18 @@ class Speech2TextStreaming:
         batch_size: int = 1,
         dtype: str = "float32",
         beam_size: int = 20,
+        ctc_weight: float = 0.0,
         lm_weight: float = 1.0,
         penalty: float = 0.0,
         nbest: int = 1,
         disable_repetition_detection=False,
         decoder_text_length_limit=0,
         encoded_feat_length_limit=0,
+        time_sync: bool = False,
+        incremental_decode: bool = False,
+        blank_penalty: float = 1.0,
+        hold_n: int = 0,
+        transducer_conf: dict = None,
     ):
         assert check_argument_types()
 
@@ -83,9 +91,19 @@ class Speech2TextStreaming:
         ) or isinstance(st_model.encoder, ContextualBlockConformerEncoder)
 
         decoder = st_model.decoder
+        if hasattr(st_model, "st_ctc"):
+            ctc = CTCPrefixScorer(ctc=st_model.st_ctc, eos=st_model.eos)
+        else:
+            ctc = None
+        # if hasattr(st_model, "st_joint_network"):
+        #     joint = st_model.st_joint_network
+        # else:
+        #     joint = None
+            
         token_list = st_model.token_list
         scorers.update(
             decoder=decoder,
+            ctc=ctc,
             length_bonus=LengthBonus(len(token_list)),
         )
 
@@ -98,9 +116,11 @@ class Speech2TextStreaming:
 
         # 3. Build BeamSearch object
         weights = dict(
-            decoder=1.0,
+            decoder=1.0 - ctc_weight,
+            ctc=ctc_weight,
             lm=lm_weight,
             length_bonus=penalty,
+            blank_penalty=blank_penalty,
         )
 
         assert "encoder_conf" in st_train_args
@@ -125,17 +145,24 @@ class Speech2TextStreaming:
             disable_repetition_detection=disable_repetition_detection,
             decoder_text_length_limit=decoder_text_length_limit,
             encoded_feat_length_limit=encoded_feat_length_limit,
+            incremental_decode=incremental_decode,
+            time_sync=time_sync,
+            ctc=st_model.st_ctc if hasattr(st_model, "st_ctc") else None,
+            hold_n = hold_n,
+            transducer_conf=transducer_conf,
+            joint_network=st_model.st_joint_network if hasattr(st_model, "st_joint_network") else None,
         )
 
-        non_batch = [
-            k
-            for k, v in beam_search.full_scorers.items()
-            if not isinstance(v, BatchScorerInterface)
-        ]
-        assert len(non_batch) == 0
+        if transducer_conf is None:
+            non_batch = [
+                k
+                for k, v in beam_search.full_scorers.items()
+                if not isinstance(v, BatchScorerInterface)
+            ]
+            assert len(non_batch) == 0
 
-        # TODO(karita): make all scorers batchfied
-        logging.info("BatchBeamSearchOnline implementation is selected.")
+            # TODO(karita): make all scorers batchfied
+            logging.info("BatchBeamSearchOnline implementation is selected.")
 
         beam_search.to(device=device, dtype=getattr(torch, dtype)).eval()
         for scorer in scorers.values():
@@ -193,6 +220,7 @@ class Speech2TextStreaming:
     def reset(self):
         self.frontend_states = None
         self.encoder_states = None
+        self.hier_encoder_states = None
         self.beam_search.reset()
 
     def apply_frontend(
@@ -294,13 +322,36 @@ class Speech2TextStreaming:
         feats, feats_lengths, self.frontend_states = self.apply_frontend(
             speech, self.frontend_states, is_final=is_final
         )
-        enc, _, self.encoder_states = self.st_model.encoder(
+
+        logging.debug("feats length:" + str(feats_lengths.item()))
+
+        enc, enc_lengths, self.encoder_states = self.st_model.encoder(
             feats,
             feats_lengths,
             self.encoder_states,
             is_final=is_final,
             infer_mode=True,
         )
+
+        logging.debug("enc length:" + str(enc_lengths.item()))
+
+        # if enc_lengths.item() != 0:
+        #     import pdb;pdb.set_trace()
+
+        if hasattr(self.st_model, "hier_encoder") and self.st_model.hier_encoder is not None:
+            enc, enc_lengths, self.hier_encoder_states = self.st_model.hier_encoder(
+                enc,
+                enc_lengths,
+                self.hier_encoder_states,
+                is_final=is_final,
+                infer_mode=True,
+            )
+
+            logging.debug("enc2 length:" + str(enc_lengths.item()))
+
+        # if enc_lengths.item() != 0:
+        #     import pdb;pdb.set_trace()
+
         nbest_hyps = self.beam_search(
             x=enc[0],
             maxlenratio=self.maxlenratio,
@@ -347,6 +398,7 @@ def inference(
     beam_size: int,
     ngpu: int,
     seed: int,
+    ctc_weight: float,
     lm_weight: float,
     penalty: float,
     nbest: int,
@@ -367,6 +419,11 @@ def inference(
     disable_repetition_detection: bool,
     encoded_feat_length_limit: int,
     decoder_text_length_limit: int,
+    time_sync: bool,
+    incremental_decode: bool,
+    blank_penalty: float,
+    hold_n: int,
+    transducer_conf: Optional[dict],
 ):
     assert check_argument_types()
     if batch_size > 1:
@@ -402,12 +459,18 @@ def inference(
         minlenratio=minlenratio,
         dtype=dtype,
         beam_size=beam_size,
+        ctc_weight=ctc_weight,
         lm_weight=lm_weight,
         penalty=penalty,
         nbest=nbest,
         disable_repetition_detection=disable_repetition_detection,
         decoder_text_length_limit=decoder_text_length_limit,
         encoded_feat_length_limit=encoded_feat_length_limit,
+        time_sync=time_sync,
+        incremental_decode=incremental_decode,
+        blank_penalty=blank_penalty,
+        hold_n=hold_n,
+        transducer_conf=transducer_conf,
     )
 
     # 3. Build data-iterator
@@ -562,6 +625,7 @@ def get_parser():
         default=0.0,
         help="Input length ratio to obtain min output length",
     )
+    group.add_argument("--ctc_weight", type=float, default=0.0, help="CTC weight")
     group.add_argument("--lm_weight", type=float, default=1.0, help="RNNLM weight")
     group.add_argument("--disable_repetition_detection", type=str2bool, default=False)
 
@@ -593,6 +657,35 @@ def get_parser():
         default=None,
         help="The model path of sentencepiece. "
         "If not given, refers from the training args",
+    )
+    group.add_argument(
+        "--time_sync",
+        type=str2bool,
+        default=False,
+        help="Time synchronous beam search.",
+    )
+    group.add_argument(
+        "--incremental_decode",
+        type=str2bool,
+        default=False,
+        help="Time synchronous beam search.",
+    )
+    group.add_argument(
+        "--blank_penalty",
+        type=float,
+        default=1.0,
+        help="Time synchronous beam search.",
+    )
+    group.add_argument(
+        "--hold_n",
+        type=int,
+        default=0,
+        help="Time synchronous beam search.",
+    )
+    group.add_argument(
+        "--transducer_conf",
+        default=None,
+        help="The keyword arguments for transducer beam search.",
     )
 
     return parser
