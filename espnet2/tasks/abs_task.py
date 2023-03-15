@@ -1875,6 +1875,13 @@ class AbsTask(ABC):
                 # NOTE(kamo): "cuda" for torch.load always indicates cuda:0
                 #   in PyTorch<=1.4
                 device = f"cuda:{torch.cuda.current_device()}"
-            model.load_state_dict(torch.load(model_file, map_location=device))
+
+            state_dict = torch.load(model_file, map_location=device)
+            new_state_dict = {
+                k.replace("frontend.upstream", "frontend.upstream.upstream"): v
+                for k, v in state_dict.items()
+            }
+            # model.load_state_dict(torch.load(model_file, map_location=device))
+            model.load_state_dict(new_state_dict)
 
         return model, args
