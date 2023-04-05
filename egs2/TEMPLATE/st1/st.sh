@@ -71,22 +71,27 @@ tgt_bpemode=unigram     # Mode of BPE (unigram or bpe) for target language.
 tgt_bpe_input_sentence_size=100000000 # Size of input sentence for BPE for target language.
 tgt_bpe_nlsyms=         # non-linguistic symbols list, separated by a comma, for BPE for target language.
 tgt_bpe_char_cover=1.0  # character coverage when modeling BPE for target language.
+hugging_face_model_name_or_path="" # Hugging Face model or path for hugging_face tokenizer
 
 # Ngram model related
 use_ngram=false
 ngram_exp=
 ngram_num=3
+use_src_ngram=false
 
 # Language model related
-use_lm=true       # Use language model for ST decoding.
+use_lm=false       # Use language model for ST decoding.
+use_src_lm=false       # Use language model for ASR multi-decoder decoding.
 lm_tag=           # Suffix to the result dir for language model training.
 lm_exp=           # Specify the directory path for LM experiment.
                   # If this option is specified, lm_tag is ignored.
+src_lm_exp=           # Specify the directory path for LM experiment.
 lm_stats_dir=     # Specify the directory path for LM statistics.
 lm_config=        # Config for language model training.
 lm_args=          # Arguments for language model training, e.g., "--max_epoch 10".
                   # Note that it will overwrite args in lm config.
 use_word_lm=false # Whether to use word language model.
+use_src_word_lm=false # Whether to use word language model.
 num_splits_lm=1   # Number of splitting for lm corpus.
 # shellcheck disable=SC2034
 word_vocab_size=10000 # Size of word vocabulary.
@@ -119,6 +124,7 @@ inference_config= # Config for decoding.
 inference_args=   # Arguments for decoding, e.g., "--lm_weight 0.1".
                   # Note that it will overwrite args in inference config.
 inference_lm=valid.loss.ave.pth       # Language model path for decoding.
+inference_asr_lm=valid.loss.ave.pth       # Language model path for decoding.
 inference_ngram=${ngram_num}gram.bin
 inference_st_model=valid.acc.ave.pth # ST model path for decoding.
                                       # e.g.
@@ -319,6 +325,7 @@ tgt_bpeprefix="${tgt_bpedir}"/bpe
 tgt_bpemodel="${tgt_bpeprefix}".model
 tgt_bpetoken_list="${tgt_bpedir}"/tokens.txt
 tgt_chartoken_list="${token_listdir}"/char/tgt_tokens.txt
+hugging_face_token_list="${token_listdir}/hugging_face_"${hugging_face_model_name_or_path/\//-}/tokens.txt
 if "${token_joint}"; then
     # if token_joint, the bpe training will use both src_lang and tgt_lang to train a single bpe model
     src_bpedir="${tgt_bpedir}"
@@ -367,6 +374,9 @@ elif [ "${tgt_token_type}" = char ]; then
 elif [ "${tgt_token_type}" = word ]; then
     tgt_token_list="${tgt_wordtoken_list}"
     tgt_bpemodel=none
+elif [ "${tgt_token_type}" = hugging_face ]; then
+    tgt_token_list="${hugging_face_token_list}"
+    tgt_bpemodel=${hugging_face_model_name_or_path}
 else
     log "Error: not supported --tgt_token_type '${tgt_token_type}'"
     exit 2
@@ -393,6 +403,9 @@ if [ -z "${st_tag}" ]; then
     st_tag+="_${src_lang}_${tgt_lang}_${tgt_token_type}_${tgt_case}"
     if [ "${tgt_token_type}" = bpe ]; then
         st_tag+="${tgt_nbpe}"
+    fi
+    if [ "${tgt_token_type}" = hugging_face ]; then
+        st_tag+="_"${hugging_face_model_name_or_path/\//-}
     fi
     # Add overwritten arg's info
     if [ -n "${st_args}" ]; then
@@ -423,6 +436,9 @@ if [ -z "${st_stats_dir}" ]; then
     st_stats_dir="${expdir}/st_stats_${feats_type}_${src_lang}_${tgt_lang}_${tgt_token_type}"
     if [ "${tgt_token_type}" = bpe ]; then
         st_stats_dir+="${tgt_nbpe}"
+    fi
+    if [ "${tgt_token_type}" = hugging_face ]; then
+        st_stats_dir+="_"${hugging_face_model_name_or_path/\//-}
     fi
     if [ -n "${speed_perturb_factors}" ]; then
         st_stats_dir+="_sp"
@@ -517,7 +533,8 @@ if ! "${skip_data_prep}"; then
             # If nothing is need, then format_wav_scp.sh does nothing:
             # i.e. the input file format and rate is same as the output.
 
-            for dset in "${train_set}" "${valid_set}" ${test_sets}; do
+            # for dset in "${train_set}" "${valid_set}" ${test_sets}; do
+            for dset in ${train_set}; do
                 if [ "${dset}" = "${train_set}" ] || [ "${dset}" = "${valid_set}" ]; then
                     _suf="/org"
                 else
@@ -793,6 +810,15 @@ if ! "${skip_data_prep}"; then
                 --add_symbol "${oov}:1" \
                 --add_symbol "${sos_eos}:-1"
 
+        elif [ "${tgt_token_type}" = hugging_face ]; then
+            log "Stage 5: Generate hugging_face token_list from ${hugging_face_model_name_or_path}"
+
+            # The first symbol in token_list must be "<blank>" and the last must be also sos/eos:
+            # 0 is reserved for CTC-blank for ASR and also used as ignore-index in the other task
+            ${python} -m espnet2.bin.hugging_face_export_vocabulary  \
+                --model_name_or_path "${hugging_face_model_name_or_path}" \
+                --output "${tgt_token_list}"
+
         else
             log "Error: not supported --token_type '${tgt_token_type}'"
             exit 2
@@ -814,68 +840,68 @@ if ! "${skip_data_prep}"; then
                 --add_symbol "${sos_eos}:-1"
         fi
 
-        # Then generate src lang
-        if "${token_joint}"; then
-            log "Stage 5b: Skip separate token construction for src_lang when setting ${token_joint} as true"
-        elif [ $use_src_lang = true ]; then
-            if [ "${src_token_type}" = bpe ]; then
-                log "Stage 5b: Generate token_list from ${src_bpe_train_text} using BPE for src_lang"
+        # # Then generate src lang
+        # if "${token_joint}"; then
+        #     log "Stage 5b: Skip separate token construction for src_lang when setting ${token_joint} as true"
+        # elif [ $use_src_lang = true ]; then
+        #     if [ "${src_token_type}" = bpe ]; then
+        #         log "Stage 5b: Generate token_list from ${src_bpe_train_text} using BPE for src_lang"
 
-                mkdir -p "${src_bpedir}"
-                # shellcheck disable=SC2002
-                cat ${src_bpe_train_text} | cut -f 2- -d" "  > "${src_bpedir}"/train.txt
+        #         mkdir -p "${src_bpedir}"
+        #         # shellcheck disable=SC2002
+        #         cat ${src_bpe_train_text} | cut -f 2- -d" "  > "${src_bpedir}"/train.txt
 
-                if [ -n "${src_bpe_nlsyms}" ]; then
-                    _opts_spm="--user_defined_symbols=${src_bpe_nlsyms}"
-                else
-                    _opts_spm=""
-                fi
+        #         if [ -n "${src_bpe_nlsyms}" ]; then
+        #             _opts_spm="--user_defined_symbols=${src_bpe_nlsyms}"
+        #         else
+        #             _opts_spm=""
+        #         fi
 
-                spm_train \
-                    --input="${src_bpedir}"/train.txt \
-                    --vocab_size="${src_nbpe}" \
-                    --model_type="${src_bpemode}" \
-                    --model_prefix="${src_bpeprefix}" \
-                    --character_coverage=${src_bpe_char_cover} \
-                    --input_sentence_size="${src_bpe_input_sentence_size}" \
-                    ${_opts_spm}
+        #         spm_train \
+        #             --input="${src_bpedir}"/train.txt \
+        #             --vocab_size="${src_nbpe}" \
+        #             --model_type="${src_bpemode}" \
+        #             --model_prefix="${src_bpeprefix}" \
+        #             --character_coverage=${src_bpe_char_cover} \
+        #             --input_sentence_size="${src_bpe_input_sentence_size}" \
+        #             ${_opts_spm}
 
-                {
-                echo "${blank}"
-                echo "${oov}"
-                # Remove <unk>, <s>, </s> from the vocabulary
-                <"${src_bpeprefix}".vocab awk '{ if( NR != 1 && NR != 2 && NR != 3 ){ print $1; } }'
-                echo "${sos_eos}"
-                } > "${src_token_list}"
+        #         {
+        #         echo "${blank}"
+        #         echo "${oov}"
+        #         # Remove <unk>, <s>, </s> from the vocabulary
+        #         <"${src_bpeprefix}".vocab awk '{ if( NR != 1 && NR != 2 && NR != 3 ){ print $1; } }'
+        #         echo "${sos_eos}"
+        #         } > "${src_token_list}"
 
-            elif [ "${src_token_type}" = char ] || [ "${src_token_type}" = word ]; then
-                log "Stage 5b: Generate character level token_list from ${src_bpe_train_text}  for src_lang"
+        #     elif [ "${src_token_type}" = char ] || [ "${src_token_type}" = word ]; then
+        #         log "Stage 5b: Generate character level token_list from ${src_bpe_train_text}  for src_lang"
 
-                _opts="--non_linguistic_symbols ${nlsyms_txt}"
+        #         _opts="--non_linguistic_symbols ${nlsyms_txt}"
 
-                # shellcheck disable=SC2002
-                cat ${src_bpe_train_text} | cut -f 2- -d" "  > "${data_feats}"/token_train.txt
+        #         # shellcheck disable=SC2002
+        #         cat ${src_bpe_train_text} | cut -f 2- -d" "  > "${data_feats}"/token_train.txt
 
-                # The first symbol in token_list must be "<blank>" and the last must be also sos/eos:
-                # 0 is reserved for CTC-blank for ST and also used as ignore-index in the other task
-                ${python} -m espnet2.bin.tokenize_text  \
-                    --token_type "${src_token_type}" \
-                    --input "${data_feats}/token_train.txt" --output "${src_token_list}" ${_opts} \
-                    --field 2- \
-                    --cleaner "${cleaner}" \
-                    --g2p "${g2p}" \
-                    --write_vocabulary true \
-                    --add_symbol "${blank}:0" \
-                    --add_symbol "${oov}:1" \
-                    --add_symbol "${sos_eos}:-1"
+        #         # The first symbol in token_list must be "<blank>" and the last must be also sos/eos:
+        #         # 0 is reserved for CTC-blank for ST and also used as ignore-index in the other task
+        #         ${python} -m espnet2.bin.tokenize_text  \
+        #             --token_type "${src_token_type}" \
+        #             --input "${data_feats}/token_train.txt" --output "${src_token_list}" ${_opts} \
+        #             --field 2- \
+        #             --cleaner "${cleaner}" \
+        #             --g2p "${g2p}" \
+        #             --write_vocabulary true \
+        #             --add_symbol "${blank}:0" \
+        #             --add_symbol "${oov}:1" \
+        #             --add_symbol "${sos_eos}:-1"
 
-            else
-                log "Error: not supported --token_type '${src_token_type}'"
-                exit 2
-            fi
+        #     else
+        #         log "Error: not supported --token_type '${src_token_type}'"
+        #         exit 2
+        #     fi
 
 
-        fi
+        # fi
     fi
 
 else
@@ -1330,8 +1356,6 @@ if ! "${skip_train}"; then
                 --valid_shape_file "${st_stats_dir}/valid/speech_shape" \
                 --valid_shape_file "${st_stats_dir}/valid/text_shape.${tgt_token_type}" \
                 --resume true \
-                --init_param ${pretrained_asr} \
-                --ignore_init_mismatch ${ignore_init_mismatch} \
                 --fold_length "${_fold_length}" \
                 --fold_length "${st_text_fold_length}" \
                 --output_dir "${st_exp}" \
@@ -1404,6 +1428,19 @@ if ! "${skip_eval}"; then
              _opts+="--ngram_file ${ngram_exp}/${inference_ngram}"
         fi
 
+        if "${use_src_lm}"; then
+            if "${use_src_word_lm}"; then
+                _opts+="--src_word_lm_train_config ${src_lm_exp}/config.yaml "
+                _opts+="--src_word_lm_file ${src_lm_exp}/${src_inference_lm} "
+            else
+                _opts+="--src_lm_train_config ${src_lm_exp}/config.yaml "
+                _opts+="--src_lm_file ${src_lm_exp}/${src_inference_lm} "
+            fi
+        fi
+        if "${use_src_ngram}"; then
+             _opts+="--src_ngram_file ${src_ngram_exp}/${src_inference_ngram}"
+        fi
+
         # 2. Generate run.sh
         log "Generate '${st_exp}/${inference_tag}/run.sh'. You can resume the process from stage 12 using this script"
         mkdir -p "${st_exp}/${inference_tag}"; echo "${run_args} --stage 12 \"\$@\"; exit \$?" > "${st_exp}/${inference_tag}/run.sh"; chmod +x "${st_exp}/${inference_tag}/run.sh"
@@ -1463,6 +1500,14 @@ if ! "${skip_eval}"; then
                     cat "${_logdir}/output.${i}/1best_recog/${f}"
                 done | LC_ALL=C sort -k1 >"${_dir}/${f}"
             done
+
+            if [ -d "${_logdir}/output.1/1asr_best_recog" ]; then
+                for f in asr_token asr_token_int asr_score asr_text; do
+                    for i in $(seq "${_nj}"); do
+                        cat "${_logdir}/output.${i}/1asr_best_recog/${f}"
+                    done | LC_ALL=C sort -k1 >"${_dir}/${f}"
+                done
+            fi
         done
     fi
 
@@ -1576,6 +1621,46 @@ if ! "${skip_eval}"; then
                     -i ${_scoredir}/hyp.trn.detok.lc.rm -m bleu chrf ter \
                     >> ${_scoredir}/result.lc.txt
                 log "Write a case-insensitve BLEU (multi-reference) result in ${_scoredir}/result.lc.txt"
+            fi
+
+            # WER scoring for multi-decoder
+            if [ -f "${_dir}/asr_text" ]; then
+                _scoredir="${_dir}/score_wer"
+                mkdir -p "${_scoredir}"
+                
+                # Tokenize text to word level
+                paste \
+                    <(<"${_data}/text" \
+                            ${python} -m espnet2.bin.tokenize_text  \
+                                -f 2- --input - --output - \
+                                --token_type word \
+                                --non_linguistic_symbols "${nlsyms_txt}" \
+                                --remove_non_linguistic_symbols true \
+                                --cleaner "${cleaner}" \
+                                ) \
+                    <(<"${_data}/utt2spk" awk '{ print "(" $2 "-" $1 ")" }') \
+                        >"${_scoredir}/ref.trn"
+
+                # NOTE(kamo): Don't use cleaner for hyp
+                paste \
+                    <(<"${_dir}/asr_text"  \
+                            ${python} -m espnet2.bin.tokenize_text  \
+                                -f 2- --input - --output - \
+                                --token_type word \
+                                --non_linguistic_symbols "${nlsyms_txt}" \
+                                --remove_non_linguistic_symbols true \
+                                ) \
+                    <(<"${_data}/utt2spk" awk '{ print "(" $2 "-" $1 ")" }') \
+                        >"${_scoredir}/hyp.trn"
+
+                sclite \
+                    ${score_opts} \
+                    -r "${_scoredir}/ref.trn" trn \
+                    -h "${_scoredir}/hyp.trn" trn \
+                    -i rm -o all stdout > "${_scoredir}/result.txt"
+
+                log "Write WER result in ${_scoredir}/result.txt"
+                grep -e Avg -e SPKR -m 2 "${_scoredir}/result.txt"
             fi
         done
 
