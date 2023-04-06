@@ -62,6 +62,7 @@ md_encoder_conf:
     dropout_rate: 0.1
 
 model_conf:
+    report_bleu: false
     asr_weight: 0.3
     mt_weight: 0.0
     mtlalpha: 0.3

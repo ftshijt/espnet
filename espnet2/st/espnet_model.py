@@ -183,6 +183,7 @@ class ESPnetSTModel(AbsESPnetModel):
             )
 
         # MT error calculator
+        report_bleu = False # NOTE(jiatong): disable bleu for s2st
         if report_bleu:
             self.mt_error_calculator = MTErrorCalculator(
                 token_list, tgt_sym_space, tgt_sym_blank, report_bleu

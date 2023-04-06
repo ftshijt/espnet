@@ -101,9 +101,7 @@ inference_tag=    # Suffix to the result dir for decoding.
 inference_config= # Config for decoding.
 inference_args=   # Arguments for decoding, e.g., "--lm_weight 0.1".
                   # Note that it will overwrite args in inference config.
-inference_lm=valid.loss.ave.pth       # Language model path for decoding.
 inference_asr_lm=valid.loss.ave.pth       # Language model path for decoding.
-inference_ngram=${ngram_num}gram.bin
 inference_st_model=valid.acc.ave.pth # ST model path for decoding.
                                       # e.g.
                                       # inference_st_model=train.loss.best.pth
@@ -118,9 +116,6 @@ valid_set=       # Name of validation set used for monitoring/tuning network tra
 test_sets=       # Names of test sets. Multiple items (e.g., both dev and eval sets) can be specified.
 src_bpe_train_text=  # Text file path of bpe training set for source language.
 tgt_bpe_train_text=  # Text file path of bpe training set for target language.
-lm_train_text=   # Text file path of language model training set.
-lm_dev_text=     # Text file path of language model development set.
-lm_test_text=    # Text file path of language model evaluation set.
 nlsyms_txt=none  # Non-linguistic symbol list if existing.
 cleaner=none     # Text cleaner.
 g2p=none         # g2p method (needed if token_type=phn).
@@ -128,7 +123,6 @@ score_opts=                # The options given to sclite scoring
 local_score_opts=          # The options given to local/score.sh.
 st_speech_fold_length=800 # fold_length for speech data during ST training.
 st_text_fold_length=150   # fold_length for text data during ST training.
-lm_fold_length=150         # fold_length for LM training.
 
 help_message=$(cat << EOF
 Usage: $0 --train-set "<train_set_name>" --valid-set "<valid_set_name>" --test_sets "<test_set_names>"
@@ -183,17 +177,6 @@ Options:
     --tgt_bpe_char_cover=1.0  # Character coverage when modeling BPE for target language. (default="${tgt_bpe_char_cover}").
 
     # Language model related
-    --lm_tag          # Suffix to the result dir for language model training (default="${lm_tag}").
-    --lm_exp          # Specify the directory path for LM experiment.
-                      # If this option is specified, lm_tag is ignored (default="${lm_exp}").
-    --lm_stats_dir    # Specify the directory path for LM statistics (default="${lm_stats_dir}").
-    --lm_config       # Config for language model training (default="${lm_config}").
-    --lm_args         # Arguments for language model training (default="${lm_args}").
-                      # e.g., --lm_args "--max_epoch 10"
-                      # Note that it will overwrite args in lm config.
-    --use_word_lm     # Whether to use word language model (default="${use_word_lm}").
-    --word_vocab_size # Size of word vocabulary (default="${word_vocab_size}").
-    --num_splits_lm   # Number of splitting for lm corpus (default="${num_splits_lm}").
 
     # ST model related
     --st_tag           # Suffix to the result dir for st model training (default="${st_tag}").
@@ -218,7 +201,6 @@ Options:
     --inference_args      # Arguments for decoding (default="${inference_args}").
                           # e.g., --inference_args "--lm_weight 0.1"
                           # Note that it will overwrite args in inference config.
-    --inference_lm        # Language model path for decoding (default="${inference_lm}").
     --inference_st_model # ST model path for decoding (default="${inference_st_model}").
     --download_model      # Download a model from Model Zoo and use it for decoding (default="${download_model}").
 
@@ -229,9 +211,6 @@ Options:
                     # Multiple items (e.g., both dev and eval sets) can be specified (required).
     --src_bpe_train_text # Text file path of bpe training set for source language.
     --tgt_bpe_train_text # Text file path of bpe training set for target language
-    --lm_train_text  # Text file path of language model training set.
-    --lm_dev_text   # Text file path of language model development set (default="${lm_dev_text}").
-    --lm_test_text  # Text file path of language model evaluation set (default="${lm_test_text}").
     --nlsyms_txt    # Non-linguistic symbol list if existing (default="${nlsyms_txt}").
     --cleaner       # Text cleaner (default="${cleaner}").
     --g2p           # g2p method (default="${g2p}").
@@ -239,7 +218,6 @@ Options:
     --local_score_opts       # The options given to local/score.sh (default="{local_score_opts}").
     --st_speech_fold_length # fold_length for speech data during ST training (default="${st_speech_fold_length}").
     --st_text_fold_length   # fold_length for text data during ST training (default="${st_text_fold_length}").
-    --lm_fold_length         # fold_length for LM training (default="${lm_fold_length}").
 EOF
 )
 
@@ -288,12 +266,6 @@ fi
 # Use the same text as ST for bpe training if not specified.
 [ -z "${src_bpe_train_text}" ] && [ $use_src_lang = true ] && src_bpe_train_text="${data_feats}/${train_set}/text.${src_suffix}"
 [ -z "${tgt_bpe_train_text}" ] && tgt_bpe_train_text="${data_feats}/${train_set}/text.${tgt_suffix}"
-# Use the same text as ST for lm training if not specified.
-[ -z "${lm_train_text}" ] && lm_train_text="${data_feats}/${train_set}/text.${tgt_suffix}"
-# Use the same text as ST for lm training if not specified.
-[ -z "${lm_dev_text}" ] && lm_dev_text="${data_feats}/${valid_set}/text.${tgt_suffix}"
-# Use the text of the 1st evaldir if lm_test is not specified
-[ -z "${lm_test_text}" ] && lm_test_text="${data_feats}/${test_sets%% *}/text.${tgt_suffix}"
 
 # Check tokenization type
 token_listdir=data/${src_lang}_${tgt_lang}_token_list
@@ -328,7 +300,7 @@ else
     src_wordtoken_list="${token_listdir}"/word/src_tokens.txt
 fi
 
-speech_token_list="${token_listdi}"/unit/tokens.txt
+speech_token_list="${token_listdir}"/unit/tokens.txt
 
 # Set token types for src and tgt langs
 if [ $use_src_lang = false ]; then
@@ -404,12 +376,6 @@ fi
 if [ -z "${st_exp}" ]; then
     st_exp="${expdir}/st_${st_tag}"
 fi
-if [ -z "${lm_exp}" ]; then
-    lm_exp="${expdir}/lm_${lm_tag}"
-fi
-if [ -z "${ngram_exp}" ]; then
-    ngram_exp="${expdir}/ngram"
-fi
 
 
 if [ -z "${inference_tag}" ]; then
@@ -421,12 +387,6 @@ if [ -z "${inference_tag}" ]; then
     # Add overwritten arg's info
     if [ -n "${inference_args}" ]; then
         inference_tag+="$(echo "${inference_args}" | sed -e "s/--/\_/g" -e "s/[ |=]//g")"
-    fi
-    if "${use_lm}"; then
-        inference_tag+="_lm_$(basename "${lm_exp}")_$(echo "${inference_lm}" | sed -e "s/\//_/g" -e "s/\.[^.]*$//g")"
-    fi
-    if "${use_ngram}"; then
-        inference_tag+="_ngram_$(basename "${ngram_exp}")_$(echo "${inference_ngram}" | sed -e "s/\//_/g" -e "s/\.[^.]*$//g")"
     fi
     inference_tag+="_st_model_$(echo "${inference_st_model}" | sed -e "s/\//_/g" -e "s/\.[^.]*$//g")"
 
