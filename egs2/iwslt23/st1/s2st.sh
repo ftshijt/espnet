@@ -520,12 +520,12 @@ if ! "${skip_train}"; then
 
         # Append the num-tokens at the last dimensions. This is used for batch-bins count
         <"${st_stats_dir}/train/text_shape" \
-            awk -v N="$(<${tgt_token_list} wc -l)" '{ print $0 "," N }' \
-            >"${st_stats_dir}/train/text_shape.${tgt_token_type}"
+            awk -v N="$(<${speech_token_list} wc -l)" '{ print $0 "," N }' \
+            >"${st_stats_dir}/train/text_shape.word"
 
         <"${st_stats_dir}/valid/text_shape" \
-            awk -v N="$(<${tgt_token_list} wc -l)" '{ print $0 "," N }' \
-            >"${st_stats_dir}/valid/text_shape.${tgt_token_type}"
+            awk -v N="$(<${speech_token_list} wc -l)" '{ print $0 "," N }' \
+            >"${st_stats_dir}/valid/text_shape.word"
 
 
         if [ $use_src_lang = true ]; then
@@ -595,7 +595,7 @@ if ! "${skip_train}"; then
                       "${_st_train_dir}/${_scp}" \
                       "${_st_train_dir}/text.${tgt_suffix}" \
                       "${st_stats_dir}/train/speech_shape" \
-                      "${st_stats_dir}/train/text_shape.${tgt_token_type}" \
+                      "${st_stats_dir}/train/text_shape.word" \
                       $_num_splits_opts \
                   --num_splits "${num_splits_st}" \
                   --output_dir "${_split_dir}"
@@ -655,8 +655,8 @@ if ! "${skip_train}"; then
             ${python} -m espnet2.bin.st_train \
                 --use_preprocessor true \
                 --bpemodel "${tgt_bpemodel}" \
-                --token_type "${tgt_token_type}" \
-                --token_list "${tgt_token_list}" \
+                --token_type "word" \
+                --token_list "${speech_token_list}" \
                 --src_token_type "${tgt_token_type}" \
                 --src_token_list "${tgt_token_list}" \
                 --non_linguistic_symbols "${nlsyms_txt}" \
@@ -665,7 +665,7 @@ if ! "${skip_train}"; then
                 --valid_data_path_and_name_and_type "${_st_valid_dir}/${_scp},speech,${_type}" \
                 --valid_data_path_and_name_and_type "${_st_valid_dir}/text.${tgt_suffix},text,text" \
                 --valid_shape_file "${st_stats_dir}/valid/speech_shape" \
-                --valid_shape_file "${st_stats_dir}/valid/text_shape.${tgt_token_type}" \
+                --valid_shape_file "${st_stats_dir}/valid/text_shape.word" \
                 --resume true \
                 --fold_length "${_fold_length}" \
                 --fold_length "${st_text_fold_length}" \
