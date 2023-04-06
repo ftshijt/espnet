@@ -1,5 +1,5 @@
 batch_type: numel
-batch_bins: 200000000
+batch_bins: 500000
 accum_grad: 8
 max_epoch: 150
 patience: none
@@ -51,10 +51,11 @@ decoder_conf:
     positional_dropout_rate: 0.1
     self_attention_dropout_rate: 0.2
     src_attention_dropout_rate: 0.2
+    use_speech_attn: false
 
 md_encoder: transformer
 md_encoder_conf:
-    output_size: 256
+    output_size: 1024
     attention_heads: 4
     linear_units: 2048
     input_layer: null
@@ -70,10 +71,7 @@ model_conf:
     lsm_weight: 0.2
     length_normalized_loss: false
     extract_feats_in_collect_stats: false
-    tgt_ignore_id: 1
-    tgt_sym_blank: "<pad>"
-    tgt_sym_sos: "<s>"
-    tgt_sym_eos: "</s>"
+    tgt_ignore_id: -1
 
 optim: adam
 optim_conf:
