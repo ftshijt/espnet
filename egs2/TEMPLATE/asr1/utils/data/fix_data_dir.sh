@@ -77,6 +77,11 @@ function filter_file {
   rm $file_to_filter.tmp
 }
 
+function filter_text {
+    awk '{print $1}' < ${data}/text.km.500 | sort | uniq > ${tmpdir}/km
+    filter_file ${tmpdir}/km ${data}/wav.scp
+}
+
 function filter_recordings {
   # We call this once before the stage when we filter on utterance-id, and once
   # after.
@@ -204,6 +209,7 @@ function filter_utts {
 
 }
 
+filter_text
 filter_recordings
 filter_speakers
 filter_utts
