@@ -1,0 +1,120 @@
+# large size
+
+batch_type: numel
+batch_bins: 8000000 # 8xA40
+accum_grad: 16
+max_epoch: 200
+patience: none
+init: none
+best_model_criterion:
+-   - valid
+    - acc
+    - max
+keep_nbest_models: 10
+# use_amp: true       # automatic mixed precision (amp)
+num_workers: 4
+num_iters_per_epoch: 500
+
+model: espnet_s2st # use s2st modeling
+
+encoder: conformer
+encoder_conf:
+    output_size: 1024
+    attention_heads: 8
+    linear_units: 2048
+    num_blocks: 12
+    dropout_rate: 0.1
+    positional_dropout_rate: 0.1
+    attention_dropout_rate: 0.1
+    input_layer: conv2d2
+    normalize_before: true
+    macaron_style: true
+    rel_pos_type: latest
+    pos_enc_layer_type: rel_pos
+    selfattention_layer_type: rel_selfattn
+    activation_type: swish
+    use_cnn_module: true
+    cnn_module_kernel: 31
+
+postencoder: length_adaptor
+postencoder_conf:
+    length_adaptor_n_layers: 1
+
+extra_asr_decoder: hugging_face_transformers
+extra_asr_decoder_conf:
+    model_name_or_path: /scratch/bbjs/yan2/espnet-ml/egs2/must_c_v2/st1/mbart-large-50-many-to-many-mmt
+
+
+decoder: transformer_md
+decoder_conf:
+    attention_heads: 8
+    linear_units: 4096
+    num_blocks: 2
+    dropout_rate: 0.1
+    positional_dropout_rate: 0.1
+    self_attention_dropout_rate: 0.2
+    src_attention_dropout_rate: 0.2
+    use_speech_attn: false
+
+md_encoder: transformer
+md_encoder_conf:
+    output_size: 1024
+    attention_heads: 8
+    linear_units: 4096
+    input_layer: null
+    num_blocks: 2
+    dropout_rate: 0.1
+
+
+model_conf:
+    asr_weight: 0.3
+    mt_weight: 0.0
+    mtlalpha: 0.3
+    st_mtlalpha: 0.0
+    lsm_weight: 0.2
+    length_normalized_loss: false
+    extract_feats_in_collect_stats: false
+    src_ignore_id: 1
+    src_sym_blank: "<pad>"
+    src_sym_sos: "<s>"
+    src_sym_eos: "</s>"
+    src_lang_token_id: 250003   #de_DE
+
+
+optim: adamw
+optim_conf:
+    lr: 0.0005
+    weight_decay: 0.000001
+scheduler: warmuplr
+scheduler_conf:
+    warmup_steps: 20000
+
+frontend: s3prl
+frontend_conf:
+    frontend_conf:
+        upstream: wavlm_large  # Note: If the upstream is changed, please change the input_size in the preencoder.
+    download_dir: ./hub
+    multilayer_feature: True
+
+preencoder: linear
+preencoder_conf:
+    input_size: 1024  # Note: If the upstream is changed, please change this value accordingly.
+    output_size: 80
+
+freeze_param: [
+  "frontend",
+  "encoder",
+  "extra_asr_decoder",
+]
+
+
+
+
+ignore_init_mismatch: true
+init_param:
+    - "/scratch/bbjs/yan2/espnet-ml/egs2/must_c_v2/st1/exp/st_conf_wavlm_nohier_mbart_m2m_raw_en_de_hugging_face_tc_facebook-mbart-large-50-many-to-many-mmt_sp/valid.acc.best.pth:encoder:encoder"
+    - "/scratch/bbjs/yan2/espnet-ml/egs2/must_c_v2/st1/exp/st_conf_wavlm_nohier_mbart_m2m_raw_en_de_hugging_face_tc_facebook-mbart-large-50-many-to-many-mmt_sp/valid.acc.best.pth:decoder:extra_asr_decoder"
+    - "/scratch/bbjs/yan2/espnet-ml/egs2/must_c_v2/st1/exp/st_conf_wavlm_nohier_mbart_m2m_raw_en_de_hugging_face_tc_facebook-mbart-large-50-many-to-many-mmt_sp/valid.acc.best.pth:st_ctc:ctc"
+    - "/scratch/bbjs/yan2/espnet-ml/egs2/must_c_v2/st1/exp/st_conf_wavlm_nohier_mbart_m2m_raw_en_de_hugging_face_tc_facebook-mbart-large-50-many-to-many-mmt_sp/valid.acc.best.pth:frontend.featurizer:frontend.featurizer"
+    - "/scratch/bbjs/yan2/espnet-ml/egs2/must_c_v2/st1/exp/st_conf_wavlm_nohier_mbart_m2m_raw_en_de_hugging_face_tc_facebook-mbart-large-50-many-to-many-mmt_sp/valid.acc.best.pth:preencoder:preencoder"
+    - "/scratch/bbjs/yan2/espnet-ml/egs2/must_c_v2/st1/exp/st_conf_wavlm_nohier_mbart_m2m_raw_en_de_hugging_face_tc_facebook-mbart-large-50-many-to-many-mmt_sp/valid.acc.best.pth:postencoder:postencoder"

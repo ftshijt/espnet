@@ -1,0 +1,18 @@
+batch_size: 1
+beam_size: 5
+penalty: 0.0
+maxlenratio: 4.0
+minlenratio: 0.0
+lm_weight: 0.0
+ctc_weight: 0.0
+
+asr_beam_size: 5
+asr_penalty: 0.0
+asr_maxlenratio: 0.0
+asr_minlenratio: 0.0
+asr_lm_weight: 0.0
+hugging_face_decoder: True
+asr_ctc_weight: 0.3
+
+use_vocoder: true
+vocoder_file: /scratch/bbjs/shi3/ParallelWaveGAN/egs/cvss_c/hubert_voc1/exp/train_tts_cvss_c_de_hubert_500_cls500_tts/checkpoint-350000steps.pkl
