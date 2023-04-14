@@ -479,7 +479,9 @@ if ! "${skip_train}"; then
 
         if [ $use_src_lang = true ]; then
             # IWSLT NOTE(Jiatong): replace src to tgt
-            _opts+="--src_bpemodel ${tgt_bpemodel} "
+            if [ "${tgt_token_type}" = bpe ] || [ "${tgt_token_type}" = hugging_face ] ; then
+                _opts+="--src_bpemodel ${tgt_bpemodel} "
+            fi
             _opts+="--train_data_path_and_name_and_type ${_st_train_dir}/text.${src_suffix},src_text,text "
             _opts+="--valid_data_path_and_name_and_type ${_st_valid_dir}/text.${src_suffix},src_text,text "
         fi
@@ -637,7 +639,10 @@ if ! "${skip_train}"; then
         fi
 
         if [ $use_src_lang = true ]; then
-            _opts+="--src_bpemodel ${tgt_bpemodel} "
+
+            if [ "${tgt_token_type}" = bpe ] || [ "${tgt_token_type}" = hugging_face ] ; then
+                _opts+="--src_bpemodel ${tgt_bpemodel} "
+            fi
             _opts+="--valid_data_path_and_name_and_type ${_st_valid_dir}/text.${src_suffix},src_text,text "
             _opts+="--valid_shape_file ${st_stats_dir}/valid/src_text_shape.${tgt_token_type} "
             _opts+="--fold_length ${st_text_fold_length} "
@@ -754,6 +759,10 @@ if ! "${skip_eval}"; then
                     cat "${_logdir}/output.${i}/1best_recog/${f}"
                 done | LC_ALL=C sort -k1 >"${_dir}/${f}"
             done
+
+            for i in $(seq "${_nj}"); do
+                cat "${_logdir}/output.${i}/1best_syn_wav/wav.scp"
+            done | LC_ALL=C sort -k1 >"${_dir}/wav.scp"
 
             if [ -d "${_logdir}/output.1/1asr_best_recog" ]; then
                 for f in asr_token asr_token_int asr_score asr_text; do
