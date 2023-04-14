@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import argparse
+import os
 import logging
 import sys
 from pathlib import Path
 from typing import Any, List, Optional, Sequence, Tuple, Union
-
+import soundfile as sf
 import numpy as np
 import torch
 from typeguard import check_argument_types, check_return_type
@@ -92,12 +93,13 @@ class Speech2Text:
         asr_ctc_weight: float = 0.3,
         asr_nbest: int = 1,
         enh_s2t_task: bool = False,
+        use_vocoder: bool = False,
+        vocoder_file: str = None,
         ctc_greedy: bool = False,
         hugging_face_decoder: bool = False,
         hugging_face_decoder_max_length: int = 256,
     ):
         assert check_argument_types()
-
         task = STTask if not enh_s2t_task else EnhS2TTask
 
         # 1. Build ST model
@@ -331,38 +333,108 @@ class Speech2Text:
             ngram=asr_ngram_weight,
             length_bonus=asr_penalty,
         )
-        asr_beam_search = BeamSearch(
-            beam_size=asr_beam_size,
-            weights=asr_weights,
-            scorers=asr_scorers,
-            sos=st_model.src_sos,
-            eos=st_model.src_eos,
-            vocab_size=len(src_token_list),
-            token_list=src_token_list,
-            pre_beam_score_key="full",
-            return_hs=True
-        )
-        # TODO(karita): make all scorers batchfied
-        if batch_size == 1:
-            non_batch = [
-                k
-                for k, v in asr_beam_search.full_scorers.items()
-                if not isinstance(v, BatchScorerInterface)
-            ]
-            if len(non_batch) == 0:
-                asr_beam_search.__class__ = BatchBeamSearch
-                logging.info("BatchBeamSearch implementation is selected for ASR.")
-            else:
-                logging.warning(
-                    f"As non-batch scorers {non_batch} are found, "
-                    f"fall back to non-batch implementation."
+
+        if (
+            asr_decoder.__class__.__name__ == "HuggingFaceTransformersDecoder"
+            and hugging_face_decoder
+        ):
+            if not is_transformers_available:
+                raise ImportError(
+                    "`transformers` is not available."
+                    " Please install it via `pip install transformers`"
+                    " or `cd /path/to/espnet/tools && . ./activate_python.sh"
+                    " && ./installers/install_transformers.sh`."
                 )
-        asr_beam_search.to(device=device, dtype=getattr(torch, dtype)).eval()
-        for scorer in asr_scorers.values():
-            if isinstance(scorer, torch.nn.Module):
-                scorer.to(device=device, dtype=getattr(torch, dtype)).eval()
-        logging.info(f"ASR Beam_search: {asr_beam_search}")
-        logging.info(f"Decoding device={device}, dtype={dtype}")        
+
+            hugging_face_model = AutoModelForSeq2SeqLM.from_pretrained(
+                asr_decoder.model_name_or_path
+            )
+
+            hugging_face_model.lm_head.load_state_dict(asr_decoder.lm_head.state_dict())
+
+            if hasattr(hugging_face_model, "model"):
+                hugging_face_model.model.decoder.load_state_dict(
+                    asr_decoder.decoder.state_dict()
+                )
+                del hugging_face_model.model.encoder
+            else:
+                hugging_face_model.decoder.load_state_dict(asr_decoder.decoder.state_dict())
+                del hugging_face_model.encoder
+
+            # del st_model.decoder.lm_head
+            # del st_model.decoder.decoder
+
+            hugging_face_linear_in = asr_decoder.linear_in
+            hugging_face_model.to(device=device).eval()
+
+            # hacky way to use .score()
+            st_model.extra_asr_decoder.hf_generate = hugging_face_model
+            asr_beam_search = BeamSearch(
+                beam_size=asr_beam_size,
+                weights=asr_weights,
+                scorers=asr_scorers,
+                sos=hugging_face_model.config.decoder_start_token_id,
+                eos=hugging_face_model.config.eos_token_id,
+                vocab_size=len(src_token_list),
+                token_list=src_token_list,
+                pre_beam_score_key="full",
+                return_hs=True
+            )
+
+            # TODO(karita): make all scorers batchfied
+            if batch_size == 1:
+                non_batch = [
+                    k
+                    for k, v in asr_beam_search.full_scorers.items()
+                    if not isinstance(v, BatchScorerInterface)
+                ]
+                if len(non_batch) == 0:
+                    asr_beam_search.__class__ = BatchBeamSearch
+                    logging.info("BatchBeamSearch implementation is selected for ASR.")
+                else:
+                    logging.warning(
+                        f"As non-batch scorers {non_batch} are found, "
+                        f"fall back to non-batch implementation."
+                    )
+            asr_beam_search.to(device=device, dtype=getattr(torch, dtype)).eval()
+            for scorer in asr_scorers.values():
+                if isinstance(scorer, torch.nn.Module):
+                    scorer.to(device=device, dtype=getattr(torch, dtype)).eval()
+            logging.info(f"ASR Beam_search: {asr_beam_search}")
+            logging.info(f"Decoding device={device}, dtype={dtype}") 
+        else:
+            asr_beam_search = BeamSearch(
+                beam_size=asr_beam_size,
+                weights=asr_weights,
+                scorers=asr_scorers,
+                sos=st_model.src_sos,
+                eos=st_model.src_eos,
+                vocab_size=len(src_token_list),
+                token_list=src_token_list,
+                pre_beam_score_key="full",
+                return_hs=True
+            )
+            # TODO(karita): make all scorers batchfied
+            if batch_size == 1:
+                non_batch = [
+                    k
+                    for k, v in asr_beam_search.full_scorers.items()
+                    if not isinstance(v, BatchScorerInterface)
+                ]
+                if len(non_batch) == 0:
+                    asr_beam_search.__class__ = BatchBeamSearch
+                    logging.info("BatchBeamSearch implementation is selected for ASR.")
+                else:
+                    logging.warning(
+                        f"As non-batch scorers {non_batch} are found, "
+                        f"fall back to non-batch implementation."
+                    )
+            asr_beam_search.to(device=device, dtype=getattr(torch, dtype)).eval()
+            for scorer in asr_scorers.values():
+                if isinstance(scorer, torch.nn.Module):
+                    scorer.to(device=device, dtype=getattr(torch, dtype)).eval()
+            logging.info(f"ASR Beam_search: {asr_beam_search}")
+            logging.info(f"Decoding device={device}, dtype={dtype}")        
 
         # 4. [Optional] Build Text converter: e.g. bpe-sym -> Text
         if token_type is None:
@@ -389,7 +461,7 @@ class Speech2Text:
 
         if src_token_type is None:
             src_tokenizer = None
-        elif src_token_type == "bpe":
+        elif src_token_type == "bpe" or src_token_type == "hugging_face":
             if src_bpemodel is not None:
                 src_tokenizer = build_tokenizer(token_type=src_token_type, bpemodel=src_bpemodel)
             else:
@@ -398,6 +470,19 @@ class Speech2Text:
             src_tokenizer = build_tokenizer(token_type=src_token_type)
         src_converter = TokenIDConverter(token_list=src_token_list)
         logging.info(f"Src Text tokenizer: {src_tokenizer}")
+
+
+        # set vocoder
+        self.vocoder = None
+        if use_vocoder:
+            vocoder = STTask.build_vocoder_from_file(
+                vocoder_file, device
+            )
+            if isinstance(vocoder, torch.nn.Module):
+                vocoder.to(dtype=getattr(torch, dtype)).eval()
+            self.vocoder = vocoder
+        
+        logging.info("Vocoder\n{}".format(self.vocoder))
 
         self.st_model = st_model
         self.st_train_args = st_train_args
@@ -450,7 +535,9 @@ class Speech2Text:
         batch = to_device(batch, device=self.device)
 
         # b. Forward Encoder
-        enc, _, asr_enc, _ = self.st_model.encode(**batch, return_int_enc=True)
+        # enc, _, asr_enc, _ = self.st_model.encode(**batch, return_int_enc=True) # this assumes that hier_enc is used
+        enc, _ = self.st_model.encode(**batch)
+        asr_enc = enc   # assume no hier_enc
         assert len(enc) == 1, len(enc)
         x = enc[0]
 
@@ -507,15 +594,6 @@ class Speech2Text:
                             yseq=torch.tensor(hyp["yseq"]),
                         ) for hyp in nbest_hyps]
         elif self.st_model.use_multidecoder and self.st_model.use_speech_attn:
-            # if isinstance(self.st_model, ESPnetSTModelSA2):
-            #     nbest_hyps = self.beam_search(
-            #         x=pre_x, maxlenratio=self.maxlenratio, minlenratio=self.minlenratio, pre_x=x, sa2=True
-            #     )
-            # elif isinstance(self.st_model, ESPnetSTModelSA4):
-            #     nbest_hyps = self.beam_search(
-            #         x=pre_x, maxlenratio=self.maxlenratio, minlenratio=self.minlenratio, pre_x=asr_enc[0], sa2=True, pre_x2=x
-            #     )
-            # else:
             nbest_hyps = self.beam_search(
                 x=x, maxlenratio=self.maxlenratio, minlenratio=self.minlenratio, pre_x=pre_x
             )
@@ -531,26 +609,6 @@ class Speech2Text:
             logging.info(
                 "best hypo: " + "".join(self.converter.ids2tokens(best.yseq[1:])) + "\n"
             )
-        # elif self.hugging_face_model:
-        #     # import pdb;pdb.set_trace()
-        #     decoder_start_token_id = (
-        #         self.hugging_face_model.config.decoder_start_token_id
-        #     )
-        #     yseq = self.hugging_face_model.generate(
-        #         encoder_outputs=ModelOutput(
-        #             last_hidden_state=self.hugging_face_linear_in(enc).unsqueeze(0)
-        #         ),
-        #         use_cache=True,
-        #         decoder_start_token_id=decoder_start_token_id,
-        #         num_beams=self.hugging_face_beam_size,
-        #         max_length=self.hugging_face_decoder_max_length,
-        #     )
-        #     nbest_hyps = [Hypothesis(yseq=yseq[0])]
-        #     logging.info(
-        #         "best hypo: "
-        #         + "".join(self.converter.ids2tokens(nbest_hyps[0].yseq[1:]))
-        #         + "\n"
-        #     )
 
         else:
             nbest_hyps = self.beam_search(
@@ -581,8 +639,22 @@ class Speech2Text:
                 text = None
             results.append((text, token, token_int, hyp))
         
+        if self.vocoder is not None:
+            wav_results = []
+            for result in results:
+                _, _, token_int, _ = result
+                input_discrete_unit = to_device(torch.tensor(token_int).view(-1, 1), device=self.device)
+                # NOTE(jiatong): we default take the last token in the token list as <unk>
+                # see scripts/feats/performa_kemans.sh for details
+                input_discrete_unit = input_discrete_unit[input_discrete_unit != len(self.st_model.token_list) - 1].view(-1, 1)
+                wav = self.vocoder(input_discrete_unit)
+                wav_results.append(wav)
+
         if self.st_model.use_multidecoder:
-            return (results, asr_results)
+            if self.vocoder is None:
+                return (results, asr_results)
+            else:
+                return (results, asr_results, wav_results)
         assert check_return_type(results)
         return results
 
@@ -662,6 +734,8 @@ def inference(
     allow_variable_data_keys: bool,
     transducer_conf: Optional[dict],
     enh_s2t_task: bool,
+    use_vocoder: bool,
+    vocoder_file: Optional[str],
     ctc_greedy: bool,
     hugging_face_decoder: bool,
     hugging_face_decoder_max_length: int,
@@ -721,6 +795,8 @@ def inference(
         asr_penalty=asr_penalty,
         asr_nbest=asr_nbest,
         enh_s2t_task=enh_s2t_task,
+        use_vocoder=use_vocoder,
+        vocoder_file=vocoder_file,
         ctc_greedy=ctc_greedy,
         hugging_face_decoder=hugging_face_decoder,
         hugging_face_decoder_max_length=hugging_face_decoder_max_length,
@@ -760,8 +836,14 @@ def inference(
                 if len(results) == 2:
                     asr_results = results[-1]
                     results = results[0]
+                    wav_results = None
+                elif len(results) == 3:
+                    asr_results = results[1]
+                    wav_results = results[2]
+                    results = results[0]
                 else:
                     asr_results = None
+                    wav_resutls = None
             except TooShortUttError as e:
                 logging.warning(f"Utterance {keys} {e}")
                 hyp = Hypothesis(score=0.0, scores={}, states={}, yseq=[])
@@ -780,6 +862,20 @@ def inference(
 
                 if text is not None:
                     ibest_writer["text"][key] = text
+            
+            for n, wav_result in zip(range(1, nbest + 1), wav_results):
+                # Create a directory: outdir/{n}best_recog
+                ibest_writer = writer[f"{n}best_syn_wav"]
+
+                # Write the result to each file
+                wav_path = os.path.join(output_dir, f"{n}best_syn_wav")
+                ibest_writer["wav.scp"][key] = os.path.join(wav_path, f"{key}.wav")
+                sf.write(
+                    os.path.join(wav_path, f"{key}.wav"),
+                    wav_result.cpu().numpy(),
+                    16000, # hard code
+                    "PCM_16",
+                )
             
             if asr_results is not None:
                 for n, (text, token, token_int, hyp, _) in zip(range(1, asr_nbest + 1), asr_results):
@@ -913,6 +1009,18 @@ def get_parser():
         type=str2bool,
         default=False,
         help="enhancement and asr joint model",
+    )
+    group.add_argument(
+        "--use_vocoder",
+        type=str2bool,
+        default=False,
+        help="whether to use discrete unit-based vocoder"
+    )
+    group.add_argument(
+        "--vocoder_file",
+        type=str_or_none,
+        default=None,
+        help="pre-trained vocoder file (along with config.yaml in the same folder)"
     )
 
     group = parser.add_argument_group("Beam-search related")

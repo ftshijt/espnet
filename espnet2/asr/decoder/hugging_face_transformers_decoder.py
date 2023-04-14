@@ -69,12 +69,15 @@ class HuggingFaceTransformersDecoder(AbsDecoder, BatchScorerInterface):
         else:
             self.linear_in = torch.nn.Identity()
 
+        self._output_size_bf_softmax = self.decoder.config.hidden_size
+
     def forward(
         self,
         hs_pad: torch.Tensor,
         hlens: torch.Tensor,
         ys_in_pad: torch.Tensor,
         ys_in_lens: torch.Tensor,
+        return_hs: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward decoder.
 
@@ -103,11 +106,14 @@ class HuggingFaceTransformersDecoder(AbsDecoder, BatchScorerInterface):
         hs_mask = (~make_pad_mask(hlens)).to(hs_pad.device).float()
         args["encoder_attention_mask"] = hs_mask
 
-        x = self.decoder(**args).last_hidden_state
-        x = self.lm_head(x)
+        decoder_out = self.decoder(**args).last_hidden_state
+        x = self.lm_head(decoder_out)
 
         olens = mask.sum(1).to(torch.int)
-        return x, olens
+        if return_hs:
+            return x, olens, decoder_out
+        else:
+            return x, olens
 
     def reload_pretrained_parameters(self):
         self.decoder.load_state_dict(self.decoder_pretrained_params)
@@ -129,16 +135,20 @@ class HuggingFaceTransformersDecoder(AbsDecoder, BatchScorerInterface):
         return next_token_scores.squeeze(0), None
 
     def batch_score(
-        self, ys: torch.Tensor, states: List[Any], xs: torch.Tensor, speech: torch.Tensor = None,
+        self, ys: torch.Tensor, states: List[Any], xs: torch.Tensor, speech: torch.Tensor = None, return_hs = False
     ) -> Tuple[torch.Tensor, List[Any]]:
         # import pdb;pdb.set_trace()
         model_kwargs = {"encoder_outputs": ModelOutput(
                     last_hidden_state=self.linear_in(xs)
                 ),}
         model_inputs = self.hf_generate.prepare_inputs_for_generation(ys, **model_kwargs)
-        outputs = self.hf_generate(**model_inputs, return_dict=True, output_attentions=False, output_hidden_states=False)
+        outputs = self.hf_generate(**model_inputs, return_dict=True, output_attentions=False, output_hidden_states=return_hs)
         next_token_logits = outputs.logits[:, -1, :]
         next_token_scores = torch.nn.functional.log_softmax(
             next_token_logits, dim=-1
         )  # (batch_size * num_beams, vocab_size)
-        return next_token_scores, None
+
+        if return_hs:
+            return next_token_scores, outputs['decoder_hidden_states'][-1][:, -1], None
+        else:
+            return next_token_scores, None

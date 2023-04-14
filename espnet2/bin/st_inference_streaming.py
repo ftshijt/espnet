@@ -86,11 +86,28 @@ class Speech2TextStreaming:
         transducer_conf: dict = None,
         hugging_face_decoder: bool = False,
         hugging_face_decoder_max_length: int = 256,
+        asr_beam_size: int = 20,
+        asr_lm_weight: float = 1.0,
+        asr_penalty: float = 0.0,
+        asr_ctc_weight: float = 0.3,
+        asr_nbest: int = 1,
+        asr_maxlenratio: float = 0.0,
+        asr_minlenratio: float = 0.0,
+        src_lm_train_config: Union[Path, str] = None,
+        src_lm_file: Union[Path, str] = None,
+        src_token_type: str = None,
+        src_bpemodel: str = None,
+        asr_disable_repetition_detection=False,
+        asr_decoder_text_length_limit=0,
+        asr_encoded_feat_length_limit=0,
+        asr_time_sync: bool = False,
+        asr_incremental_decode: bool = False,
     ):
         assert check_argument_types()
 
         # 1. Build ST model
         scorers = {}
+        asr_scorers = {}
         st_model, st_train_args = STTask.build_model_from_file(
             st_train_config, st_model_file, device
         )
@@ -117,12 +134,30 @@ class Speech2TextStreaming:
             length_bonus=LengthBonus(len(token_list)),
         )
 
+        src_token_list = st_model.src_token_list
+        if st_model.use_multidecoder:
+            asr_decoder = st_model.extra_asr_decoder
+            asr_ctc = CTCPrefixScorer(ctc=st_model.ctc, eos=st_model.src_eos)
+            asr_scorers.update(
+                decoder=asr_decoder,
+                ctc=asr_ctc,
+                length_bonus=LengthBonus(len(src_token_list)),
+            )
+        else:
+            asr_decoder = None
+
         # 2. Build Language model
         if lm_train_config is not None:
             lm, lm_train_args = LMTask.build_model_from_file(
                 lm_train_config, lm_file, device
             )
             scorers["lm"] = lm.lm
+
+        if src_lm_train_config is not None:
+            src_lm, src_lm_train_args = LMTask.build_model_from_file(
+                src_lm_train_config, src_lm_file, device
+            )
+            asr_scorers["lm"] = src_lm.lm
 
         # 3. Build BeamSearch object
         weights = dict(
@@ -218,7 +253,144 @@ class Speech2TextStreaming:
                 hold_n = hold_n,
                 transducer_conf=transducer_conf,
                 joint_network=st_model.st_joint_network if hasattr(st_model, "st_joint_network") else None,
+                block_size=0,   # recompute
             )
+
+        if transducer_conf is None:
+            non_batch = [
+                k
+                for k, v in beam_search.full_scorers.items()
+                if not isinstance(v, BatchScorerInterface)
+            ]
+            assert len(non_batch) == 0
+
+            # TODO(karita): make all scorers batchfied
+            logging.info("BatchBeamSearchOnline implementation is selected.")
+
+        beam_search.to(device=device, dtype=getattr(torch, dtype)).eval()
+        for scorer in scorers.values():
+            if isinstance(scorer, torch.nn.Module):
+                scorer.to(device=device, dtype=getattr(torch, dtype)).eval()
+        logging.info(f"Beam_search: {beam_search}")
+        logging.info(f"Decoding device={device}, dtype={dtype}")
+
+        asr_weights = dict(
+            decoder=1.0 - asr_ctc_weight,
+            ctc=asr_ctc_weight,
+            lm=asr_lm_weight,
+            length_bonus=asr_penalty,
+        )
+
+        if (
+            asr_decoder.__class__.__name__ == "HuggingFaceTransformersDecoder"
+            and hugging_face_decoder
+        ):
+            if not is_transformers_available:
+                raise ImportError(
+                    "`transformers` is not available."
+                    " Please install it via `pip install transformers`"
+                    " or `cd /path/to/espnet/tools && . ./activate_python.sh"
+                    " && ./installers/install_transformers.sh`."
+                )
+
+            hugging_face_model = AutoModelForSeq2SeqLM.from_pretrained(
+                asr_decoder.model_name_or_path
+            )
+
+            hugging_face_model.lm_head.load_state_dict(asr_decoder.lm_head.state_dict())
+
+            if hasattr(hugging_face_model, "model"):
+                hugging_face_model.model.decoder.load_state_dict(
+                    asr_decoder.decoder.state_dict()
+                )
+                del hugging_face_model.model.encoder
+            else:
+                hugging_face_model.decoder.load_state_dict(asr_decoder.decoder.state_dict())
+                del hugging_face_model.encoder
+
+            # del st_model.decoder.lm_head
+            # del st_model.decoder.decoder
+
+            hugging_face_linear_in = asr_decoder.linear_in
+            hugging_face_model.to(device=device).eval()
+
+            # hacky way to use .score()
+            st_model.extra_asr_decoder.hf_generate = hugging_face_model
+            asr_beam_search = BatchBeamSearchOnline(
+                beam_size=asr_beam_size,
+                weights=asr_weights,
+                scorers=asr_scorers,
+                sos=hugging_face_model.config.decoder_start_token_id,
+                eos=hugging_face_model.config.eos_token_id,
+                vocab_size=len(src_token_list),
+                token_list=src_token_list,
+                pre_beam_score_key="full",
+                disable_repetition_detection=asr_disable_repetition_detection,
+                decoder_text_length_limit=asr_decoder_text_length_limit,
+                encoded_feat_length_limit=asr_encoded_feat_length_limit,
+                incremental_decode=asr_incremental_decode,
+                time_sync=asr_time_sync,
+                block_size=0,   # recompute
+                return_hs=True,
+            )
+
+            if transducer_conf is None:
+                non_batch = [
+                    k
+                    for k, v in asr_beam_search.full_scorers.items()
+                    if not isinstance(v, BatchScorerInterface)
+                ]
+                assert len(non_batch) == 0
+
+                # TODO(karita): make all scorers batchfied
+                logging.info("BatchBeamSearchOnline implementation is selected for ASR.")
+
+            asr_beam_search.to(device=device, dtype=getattr(torch, dtype)).eval()
+            for scorer in asr_scorers.values():
+                if isinstance(scorer, torch.nn.Module):
+                    scorer.to(device=device, dtype=getattr(torch, dtype)).eval()
+            logging.info(f"Beam_search: {asr_beam_search}")
+            logging.info(f"Decoding device={device}, dtype={dtype}")
+
+        else:
+            # TODO: batchbeamsearch should get ctx block encoder information on init? 
+            asr_beam_search = BatchBeamSearchOnline(
+                beam_size=asr_beam_size,
+                weights=asr_weights,
+                scorers=asr_scorers,
+                sos=st_model.src_sos,
+                eos=st_model.src_eos,
+                vocab_size=len(src_token_list),
+                token_list=src_token_list,
+                pre_beam_score_key="full",
+                disable_repetition_detection=asr_disable_repetition_detection,
+                decoder_text_length_limit=asr_decoder_text_length_limit,
+                encoded_feat_length_limit=asr_encoded_feat_length_limit,
+                incremental_decode=asr_incremental_decode,
+                time_sync=asr_time_sync,
+                ctc=st_model.ctc if hasattr(st_model, "ctc") else None,
+                hold_n = hold_n,
+                transducer_conf=transducer_conf,
+                joint_network=st_model.joint_network if hasattr(st_model, "joint_network") else None,
+            )
+
+            if transducer_conf is None:
+                non_batch = [
+                    k
+                    for k, v in asr_beam_search.full_scorers.items()
+                    if not isinstance(v, BatchScorerInterface)
+                ]
+                assert len(non_batch) == 0
+
+                # TODO(karita): make all scorers batchfied
+                logging.info("BatchBeamSearchOnline implementation is selected for ASR.")
+
+            asr_beam_search.to(device=device, dtype=getattr(torch, dtype)).eval()
+            for scorer in asr_scorers.values():
+                if isinstance(scorer, torch.nn.Module):
+                    scorer.to(device=device, dtype=getattr(torch, dtype)).eval()
+            logging.info(f"Beam_search: {asr_beam_search}")
+            logging.info(f"Decoding device={device}, dtype={dtype}")
 
         if transducer_conf is None:
             non_batch = [
@@ -256,6 +428,23 @@ class Speech2TextStreaming:
         converter = TokenIDConverter(token_list=token_list)
         logging.info(f"Text tokenizer: {tokenizer}")
 
+        if src_token_type is None:
+            src_token_type = st_train_args.src_token_type
+        if src_bpemodel is None:
+            src_bpemodel = st_train_args.src_bpemodel
+
+        if src_token_type is None:
+            src_tokenizer = None
+        elif src_token_type == "bpe" or src_token_type == "hugging_face":
+            if src_bpemodel is not None:
+                src_tokenizer = build_tokenizer(token_type=src_token_type, bpemodel=src_bpemodel)
+            else:
+                src_tokenizer = None
+        else:
+            src_tokenizer = build_tokenizer(token_type=src_token_type)
+        src_converter = TokenIDConverter(token_list=src_token_list)
+        logging.info(f"Src Text tokenizer: {src_tokenizer}")
+
         self.st_model = st_model
         self.st_train_args = st_train_args
         self.converter = converter
@@ -270,6 +459,13 @@ class Speech2TextStreaming:
         self.device = device
         self.dtype = dtype
         self.nbest = nbest
+        self.asr_beam_search = asr_beam_search
+        self.asr_maxlenratio = asr_maxlenratio
+        self.asr_minlenratio = asr_minlenratio
+        self.asr_nbest = asr_nbest
+        self.src_converter = src_converter
+        self.src_tokenizer = src_tokenizer
+
         if "n_fft" in st_train_args.frontend_conf:
             self.n_fft = st_train_args.frontend_conf["n_fft"]
         else:
@@ -293,6 +489,8 @@ class Speech2TextStreaming:
         self.encoder_states = None
         self.hier_encoder_states = None
         self.beam_search.reset()
+        if hasattr(self, "asr_beam_search"):
+            self.asr_beam_search.reset()
 
     def apply_frontend(
         self, speech: torch.Tensor, prev_states=None, is_final: bool = False
@@ -432,6 +630,23 @@ class Speech2TextStreaming:
             # if enc_lengths.item() != 0:
             #     import pdb;pdb.set_trace()
 
+        # Multi-decoder ASR beam search
+        if self.st_model.use_multidecoder:
+            asr_nbest_hyps = self.asr_beam_search(
+                x=enc[0],
+                maxlenratio=self.asr_maxlenratio,
+                minlenratio=self.asr_minlenratio,
+                is_final=is_final,
+            )
+            if is_final:
+                asr_hs = torch.stack(asr_nbest_hyps[0].hs).unsqueeze(0)
+            else:
+                asr_hs = torch.stack(self.asr_beam_search.running_hyps.hs[0]).unsqueeze(0)
+            
+            asr_hs_lengths = asr_hs.new_full([1], dtype=torch.long, fill_value=asr_hs.size(1))
+            md_enc, _, _ = self.st_model.md_encoder(asr_hs, asr_hs_lengths)
+            enc = md_enc
+
         nbest_hyps = self.beam_search(
             x=enc[0],
             maxlenratio=self.maxlenratio,
@@ -506,6 +721,22 @@ def inference(
     transducer_conf: Optional[dict],
     hugging_face_decoder: bool,
     hugging_face_decoder_max_length: int,
+    asr_beam_size: int,
+    asr_lm_weight: float,
+    asr_penalty: float,
+    asr_ctc_weight: float,
+    asr_nbest: int,
+    asr_maxlenratio: float,
+    asr_minlenratio: float,
+    src_lm_train_config: Optional[str],
+    src_lm_file: Optional[str],
+    src_token_type: Optional[str],
+    src_bpemodel: Optional[str],
+    asr_disable_repetition_detection: bool,
+    asr_decoder_text_length_limit: int,
+    asr_encoded_feat_length_limit: int,
+    asr_time_sync: bool,
+    asr_incremental_decode: bool,
 ):
     assert check_argument_types()
     if batch_size > 1:
@@ -555,6 +786,22 @@ def inference(
         transducer_conf=transducer_conf,
         hugging_face_decoder=hugging_face_decoder,
         hugging_face_decoder_max_length=hugging_face_decoder_max_length,
+        asr_beam_size=asr_beam_size,
+        asr_lm_weight=asr_lm_weight,
+        asr_penalty=asr_penalty,
+        asr_ctc_weight=asr_ctc_weight,
+        asr_nbest=asr_nbest,
+        asr_maxlenratio=asr_maxlenratio,
+        asr_minlenratio=asr_minlenratio,
+        src_lm_train_config=src_lm_train_config,
+        src_lm_file=src_lm_file,
+        src_token_type=src_token_type,
+        src_bpemodel=src_bpemodel,
+        asr_disable_repetition_detection=asr_disable_repetition_detection,
+        asr_decoder_text_length_limit=asr_decoder_text_length_limit,
+        asr_encoded_feat_length_limit=asr_encoded_feat_length_limit,
+        asr_time_sync=asr_time_sync,
+        asr_incremental_decode=asr_incremental_decode,
     )
 
     # 3. Build data-iterator
@@ -694,6 +941,8 @@ def get_parser():
     group.add_argument("--st_model_file", type=str, required=True)
     group.add_argument("--lm_train_config", type=str)
     group.add_argument("--lm_file", type=str)
+    group.add_argument("--src_lm_train_config", type=str)
+    group.add_argument("--src_lm_file", type=str)
     group.add_argument("--word_lm_train_config", type=str)
     group.add_argument("--word_lm_file", type=str)
 
@@ -725,6 +974,27 @@ def get_parser():
     group.add_argument("--ctc_weight", type=float, default=0.0, help="CTC weight")
     group.add_argument("--lm_weight", type=float, default=1.0, help="RNNLM weight")
     group.add_argument("--disable_repetition_detection", type=str2bool, default=False)
+    group.add_argument("--asr_nbest", type=int, default=1, help="Output N-best hypotheses")
+    group.add_argument("--asr_beam_size", type=int, default=20, help="Beam size")
+    group.add_argument("--asr_penalty", type=float, default=0.0, help="Insertion penalty")
+    group.add_argument(
+        "--asr_maxlenratio",
+        type=float,
+        default=0.0,
+        help="Input length ratio to obtain max output length. "
+        "If maxlenratio=0.0 (default), it uses a end-detect "
+        "function "
+        "to automatically find maximum hypothesis lengths",
+    )
+    group.add_argument(
+        "--asr_minlenratio",
+        type=float,
+        default=0.0,
+        help="Input length ratio to obtain min output length",
+    )
+    group.add_argument("--asr_ctc_weight", type=float, default=0.0, help="CTC weight")
+    group.add_argument("--asr_lm_weight", type=float, default=1.0, help="RNNLM weight")
+    group.add_argument("--asr_disable_repetition_detection", type=str2bool, default=False)
 
     group.add_argument(
         "--encoded_feat_length_limit",
@@ -734,6 +1004,18 @@ def get_parser():
     )
     group.add_argument(
         "--decoder_text_length_limit",
+        type=int,
+        default=0,
+        help="Limit the lengths of the text" "to input to the decoder.",
+    )
+    group.add_argument(
+        "--asr_encoded_feat_length_limit",
+        type=int,
+        default=0,
+        help="Limit the lengths of the encoded feature" "to input to the decoder.",
+    )
+    group.add_argument(
+        "--asr_decoder_text_length_limit",
         type=int,
         default=0,
         help="Limit the lengths of the text" "to input to the decoder.",
@@ -756,6 +1038,21 @@ def get_parser():
         "If not given, refers from the training args",
     )
     group.add_argument(
+        "--src_token_type",
+        type=str_or_none,
+        default=None,
+        choices=["char", "bpe", None],
+        help="The token type for ST model. "
+        "If not given, refers from the training args",
+    )
+    group.add_argument(
+        "--src_bpemodel",
+        type=str_or_none,
+        default=None,
+        help="The model path of sentencepiece. "
+        "If not given, refers from the training args",
+    )
+    group.add_argument(
         "--time_sync",
         type=str2bool,
         default=False,
@@ -763,6 +1060,18 @@ def get_parser():
     )
     group.add_argument(
         "--incremental_decode",
+        type=str2bool,
+        default=False,
+        help="Time synchronous beam search.",
+    )
+    group.add_argument(
+        "--asr_time_sync",
+        type=str2bool,
+        default=False,
+        help="Time synchronous beam search.",
+    )
+    group.add_argument(
+        "--asr_incremental_decode",
         type=str2bool,
         default=False,
         help="Time synchronous beam search.",
@@ -786,6 +1095,7 @@ def get_parser():
     )
     group.add_argument("--hugging_face_decoder", type=str2bool, default=False)
     group.add_argument("--hugging_face_decoder_max_length", type=int, default=256)
+
 
     return parser
 

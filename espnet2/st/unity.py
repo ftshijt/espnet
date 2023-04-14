@@ -38,7 +38,7 @@ else:
         yield
 
 
-class ESPnetSTModel(AbsESPnetModel):
+class ESPnetS2STModel(AbsESPnetModel):
     """CTC-attention hybrid Encoder-Decoder model"""
 
     def __init__(
@@ -66,7 +66,7 @@ class ESPnetSTModel(AbsESPnetModel):
         mtlalpha: float = 0.0,
         st_mtlalpha: float = 0.0,
         ignore_id: int = -1,
-        tgt_ignore_id: int = -1,
+        src_ignore_id: int = -1,
         lsm_weight: float = 0.0,
         length_normalized_loss: bool = False,
         report_cer: bool = True,
@@ -74,13 +74,13 @@ class ESPnetSTModel(AbsESPnetModel):
         report_bleu: bool = True,
         sym_space: str = "<space>",
         sym_blank: str = "<blank>",
-        tgt_sym_space: str = "<space>",
-        tgt_sym_blank: str = "<blank>",
+        src_sym_space: str = "<space>",
+        src_sym_blank: str = "<blank>",
         extract_feats_in_collect_stats: bool = True,
         ctc_sample_rate: float = 0.0,
-        tgt_sym_sos: str = "<sos/eos>",
-        tgt_sym_eos: str = "<sos/eos>",
-        lang_token_id: int = -1,
+        src_sym_sos: str = "<sos/eos>",
+        src_sym_eos: str = "<sos/eos>",
+        src_lang_token_id: int = -1,
     ):
         assert check_argument_types()
         assert 0.0 <= asr_weight < 1.0, "asr_weight should be [0.0, 1.0)"
@@ -89,20 +89,20 @@ class ESPnetSTModel(AbsESPnetModel):
 
         super().__init__()
         # note that eos is the same as sos (equivalent ID)
-        if tgt_sym_sos in token_list:
-            self.sos = token_list.index(tgt_sym_sos)
+        if src_sym_sos in src_token_list:
+            self.src_sos = src_token_list.index(src_sym_sos)
         else:
-            self.sos = vocab_size - 1
-        if tgt_sym_eos in token_list:
-            self.eos = token_list.index(tgt_sym_eos)
+            self.src_sos = src_vocab_size - 1
+        if src_sym_eos in src_token_list:
+            self.src_eos = src_token_list.index(src_sym_eos)
         else:
-            self.eos = vocab_size - 1
-        self.src_sos = src_vocab_size - 1 if src_vocab_size else None
-        self.src_eos = src_vocab_size - 1 if src_vocab_size else None
+            self.src_eos = src_vocab_size - 1
+        self.sos = vocab_size - 1
+        self.eos = vocab_size - 1
         self.vocab_size = vocab_size
         self.src_vocab_size = src_vocab_size
         self.ignore_id = ignore_id
-        self.tgt_ignore_id = tgt_ignore_id
+        self.src_ignore_id = src_ignore_id
         self.asr_weight = asr_weight
         self.mt_weight = mt_weight
         self.mtlalpha = mtlalpha
@@ -143,7 +143,7 @@ class ESPnetSTModel(AbsESPnetModel):
         else:
             self.criterion_st = LabelSmoothingLoss(
                 size=vocab_size,
-                padding_idx=tgt_ignore_id,
+                padding_idx=ignore_id,
                 smoothing=lsm_weight,
                 normalize_length=length_normalized_loss,
             )
@@ -153,7 +153,7 @@ class ESPnetSTModel(AbsESPnetModel):
 
         self.criterion_asr = LabelSmoothingLoss(
             size=src_vocab_size,
-            padding_idx=ignore_id,
+            padding_idx=src_ignore_id,
             smoothing=lsm_weight,
             normalize_length=length_normalized_loss,
         )
@@ -212,10 +212,10 @@ class ESPnetSTModel(AbsESPnetModel):
 
         # TODO(jiatong): add multilingual related functions
 
-        if lang_token_id != -1:
-            self.lang_token_id = torch.tensor([[lang_token_id]])
+        if src_lang_token_id != -1:
+            self.src_lang_token_id = torch.tensor([[src_lang_token_id]])
         else:
-            self.lang_token_id = None
+            self.src_lang_token_id = None
 
     def forward(
         self,
@@ -260,12 +260,13 @@ class ESPnetSTModel(AbsESPnetModel):
 
         batch_size = speech.shape[0]
 
-        text[text == -1] = self.tgt_ignore_id
+        text[text == -1] = self.ignore_id
 
         # for data-parallel
         text = text[:, : text_lengths.max()]
         if src_text is not None:
             src_text = src_text[:, : src_text_lengths.max()]
+            src_text[src_text == -1] = self.src_ignore_id
 
         # 1. Encoder
         if self.hier_encoder is not None or (self.postencoder is not None and self.postencoder.return_int_enc):
@@ -526,7 +527,7 @@ class ESPnetSTModel(AbsESPnetModel):
             )
             ys_pad_lens += 1
 
-        ys_in_pad, ys_out_pad = add_sos_eos(ys_pad, self.sos, self.eos, self.tgt_ignore_id)
+        ys_in_pad, ys_out_pad = add_sos_eos(ys_pad, self.sos, self.eos, self.ignore_id)
         ys_in_lens = ys_pad_lens + 1
 
         # 1. Forward decoder
@@ -549,7 +550,7 @@ class ESPnetSTModel(AbsESPnetModel):
         acc_att = th_accuracy(
             decoder_out.view(-1, self.vocab_size),
             ys_out_pad,
-            ignore_label=self.tgt_ignore_id,
+            ignore_label=self.ignore_id,
         )
 
         # Compute cer/wer using attention-decoder
@@ -569,6 +570,17 @@ class ESPnetSTModel(AbsESPnetModel):
         ys_pad_lens: torch.Tensor,
         return_hs: bool = False,
     ):
+
+        if hasattr(self, "src_lang_token_id") and self.src_lang_token_id is not None:
+            ys_pad = torch.cat(
+                [
+                    self.src_lang_token_id.repeat(ys_pad.size(0), 1).to(ys_pad.device),
+                    ys_pad,
+                ],
+                dim=1,
+            )
+            ys_pad_lens += 1
+
         # Use CTC output as AR decoder target; useful for multi-decoder training
         skip_loss = False
         if self.training and self.ctc_sample_rate > 0:
@@ -587,7 +599,7 @@ class ESPnetSTModel(AbsESPnetModel):
                 skip_loss = True
 
         ys_in_pad, ys_out_pad = add_sos_eos(
-            ys_pad, self.src_sos, self.src_eos, self.ignore_id
+            ys_pad, self.src_sos, self.src_eos, self.src_ignore_id
         )
         ys_in_lens = ys_pad_lens + 1
 
@@ -610,7 +622,7 @@ class ESPnetSTModel(AbsESPnetModel):
         acc_att = th_accuracy(
             decoder_out.view(-1, self.src_vocab_size),
             ys_out_pad,
-            ignore_label=self.ignore_id,
+            ignore_label=self.src_ignore_id,
         )
 
         # Compute cer/wer using attention-decoder
@@ -678,7 +690,7 @@ class ESPnetSTModel(AbsESPnetModel):
         decoder_in, target, t_len, u_len = get_transducer_task_io(
             labels,
             encoder_out_lens,
-            ignore_id=self.tgt_ignore_id,
+            ignore_id=self.ignore_id,
             blank_id=self.blank_id,
         )
 

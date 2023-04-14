@@ -1,6 +1,7 @@
 import argparse
 import logging
 from typing import Callable, Collection, Dict, List, Optional, Tuple, Union
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -21,6 +22,7 @@ from espnet2.asr.decoder.transformer_decoder import (
     TransformerDecoder,
     TransformerMDDecoder,
 )
+from espnet2.train.abs_espnet_model import AbsESPnetModel
 from espnet2.asr.encoder.abs_encoder import AbsEncoder
 from espnet2.asr.encoder.conformer_encoder import ConformerEncoder
 from espnet2.asr.encoder.branchformer_encoder import BranchformerEncoder
@@ -58,6 +60,7 @@ from espnet2.layers.abs_normalize import AbsNormalize
 from espnet2.layers.global_mvn import GlobalMVN
 from espnet2.layers.utterance_mvn import UtteranceMVN
 from espnet2.st.espnet_model import ESPnetSTModel
+from espnet2.st.unity import ESPnetS2STModel
 # from espnet2.st.espnet_model_md2 import ESPnetSTModelMD2
 from espnet2.tasks.abs_task import AbsTask
 from espnet2.text.phoneme_tokenizer import g2p_choices
@@ -66,6 +69,7 @@ from espnet2.train.class_choices import ClassChoices
 from espnet2.train.collate_fn import CommonCollateFn
 from espnet2.train.preprocessor import MutliTokenizerCommonPreprocessor
 from espnet2.train.trainer import Trainer
+from espnet2.tts.utils import ParallelWaveGANPretrainedVocoder
 from espnet2.utils.get_default_kwargs import get_default_kwargs
 from espnet2.utils.nested_dict_action import NestedDictAction
 from espnet2.utils.types import float_or_none, int_or_none, str2bool, str_or_none
@@ -96,6 +100,15 @@ normalize_choices = ClassChoices(
     type_check=AbsNormalize,
     default="utterance_mvn",
     optional=True,
+)
+model_choices = ClassChoices(
+    "model",
+    classes=dict(
+        espnet=ESPnetSTModel,
+        espnet_s2st=ESPnetS2STModel
+    ),
+    type_check=AbsESPnetModel,
+    default="espnet",
 )
 preencoder_choices = ClassChoices(
     name="preencoder",
@@ -161,6 +174,7 @@ extra_asr_decoder_choices = ClassChoices(
         dynamic_conv=DynamicConvolutionTransformerDecoder,
         dynamic_conv2d=DynamicConvolution2DTransformerDecoder,
         rnn=RNNDecoder,
+        hugging_face_transformers=HuggingFaceTransformersDecoder,
     ),
     type_check=AbsDecoder,
     default=None,
@@ -226,6 +240,8 @@ class STTask(AbsTask):
         specaug_choices,
         # --normalize and --normalize_conf
         normalize_choices,
+        # --model and --model_conf
+        model_choices,
         # --preencoder and --preencoder_conf
         preencoder_choices,
         # --encoder and --encoder_conf
@@ -302,12 +318,12 @@ class STTask(AbsTask):
             default=None,
             help="The keyword arguments for joint network class.",
         )
-        group.add_argument(
-            "--model_conf",
-            action=NestedDictAction,
-            default=get_default_kwargs(ESPnetSTModel),
-            help="The keyword arguments for model class.",
-        )
+        # group.add_argument(
+        #     "--model_conf",
+        #     action=NestedDictAction,
+        #     default=get_default_kwargs(ESPnetSTModel),
+        #     help="The keyword arguments for model class.",
+        # )
 
         group = parser.add_argument_group(description="Preprocess related")
         group.add_argument(
@@ -327,7 +343,7 @@ class STTask(AbsTask):
             "--src_token_type",
             type=str,
             default="bpe",
-            choices=["bpe", "char", "word", "phn", "none"],
+            choices=["bpe", "char", "word", "phn", "none", "hugging_face"],
             help="The source text will be tokenized " "in the specified level token",
         )
         group.add_argument(
@@ -498,7 +514,7 @@ class STTask(AbsTask):
         return retval
 
     @classmethod
-    def build_model(cls, args: argparse.Namespace) -> Union[ESPnetSTModel]:
+    def build_model(cls, args: argparse.Namespace) -> Union[ESPnetSTModel, ESPnetS2STModel]:
         assert check_argument_types()
         if isinstance(args.token_list, str):
             with open(args.token_list, encoding="utf-8") as f:
@@ -589,7 +605,61 @@ class STTask(AbsTask):
         else:
             postencoder = None
 
-        # 5. Decoder
+
+
+        # 5. CTC
+        if src_token_list is not None:
+            ctc = CTC(
+                odim=src_vocab_size,
+                encoder_output_size=asr_encoder_output_size,
+                **args.ctc_conf,
+            )
+        else:
+            ctc = None
+
+        st_ctc = CTC(
+            odim=vocab_size,
+            encoder_output_size=encoder_output_size,
+            **args.ctc_conf,
+        )
+
+        # 6. ASR extra decoder
+        if (
+            getattr(args, "extra_asr_decoder", None) is not None
+            and src_token_list is not None
+        ):
+            extra_asr_decoder_class = extra_asr_decoder_choices.get_class(
+                args.extra_asr_decoder
+            )
+            extra_asr_decoder = extra_asr_decoder_class(
+                vocab_size=src_vocab_size,
+                encoder_output_size=asr_encoder_output_size,
+                **args.extra_asr_decoder_conf,
+            )
+        else:
+            extra_asr_decoder = None
+
+        # 7. MT extra decoder
+        if getattr(args, "extra_mt_decoder", None) is not None:
+            extra_mt_decoder_class = extra_mt_decoder_choices.get_class(
+                args.extra_mt_decoder
+            )
+            extra_mt_decoder = extra_mt_decoder_class(
+                vocab_size=vocab_size,
+                encoder_output_size=encoder_output_size,
+                **args.extra_mt_decoder_conf,
+            )
+        else:
+            extra_mt_decoder = None
+
+        # 8. MD encoder
+        if getattr(args, "md_encoder", None) is not None:
+            md_encoder_class = md_encoder_choices.get_class(args.md_encoder)
+            md_encoder = md_encoder_class(input_size=extra_asr_decoder._output_size_bf_softmax, **args.md_encoder_conf)
+        else:
+            md_encoder = None
+
+        # 9. Decoder
         decoder_class = decoder_choices.get_class(args.decoder)
 
         if args.decoder == "transducer":
@@ -606,65 +676,20 @@ class STTask(AbsTask):
                 **args.st_joint_net_conf,
             )
         else:
-            decoder = decoder_class(
-                vocab_size=vocab_size,
-                encoder_output_size=encoder_output_size,
-                **args.decoder_conf,
-            )
+            if md_encoder is not None:
+                decoder = decoder_class(
+                    vocab_size=vocab_size,
+                    encoder_output_size=md_encoder.output_size(),
+                    **args.decoder_conf,
+                )
+            else:
+                decoder = decoder_class(
+                    vocab_size=vocab_size,
+                    encoder_output_size=encoder_output_size,
+                    **args.decoder_conf,
+                )
 
             st_joint_network = None
-
-        # 6. CTC
-        if src_token_list is not None:
-            ctc = CTC(
-                odim=src_vocab_size,
-                encoder_output_size=asr_encoder_output_size,
-                **args.ctc_conf,
-            )
-        else:
-            ctc = None
-
-        st_ctc = CTC(
-            odim=vocab_size,
-            encoder_output_size=encoder_output_size,
-            **args.ctc_conf,
-        )
-
-        # 7. ASR extra decoder
-        if (
-            getattr(args, "extra_asr_decoder", None) is not None
-            and src_token_list is not None
-        ):
-            extra_asr_decoder_class = extra_asr_decoder_choices.get_class(
-                args.extra_asr_decoder
-            )
-            extra_asr_decoder = extra_asr_decoder_class(
-                vocab_size=src_vocab_size,
-                encoder_output_size=asr_encoder_output_size,
-                **args.extra_asr_decoder_conf,
-            )
-        else:
-            extra_asr_decoder = None
-
-        # 8. MT extra decoder
-        if getattr(args, "extra_mt_decoder", None) is not None:
-            extra_mt_decoder_class = extra_mt_decoder_choices.get_class(
-                args.extra_mt_decoder
-            )
-            extra_mt_decoder = extra_mt_decoder_class(
-                vocab_size=vocab_size,
-                encoder_output_size=encoder_output_size,
-                **args.extra_mt_decoder_conf,
-            )
-        else:
-            extra_mt_decoder = None
-
-        # 9. MD encoder
-        if getattr(args, "md_encoder", None) is not None:
-            md_encoder_class = md_encoder_choices.get_class(args.md_encoder)
-            md_encoder = md_encoder_class(input_size=extra_asr_decoder._output_size_bf_softmax, **args.md_encoder_conf)
-        else:
-            md_encoder = None
 
         # 10. Build model
         # if getattr(args, "md_version", None) == "v2":
@@ -690,7 +715,11 @@ class STTask(AbsTask):
         #         **args.model_conf,
         #     )
         # else:
-        model = ESPnetSTModel(
+        try:
+            model_class = model_choices.get_class(args.model)
+        except AttributeError:
+            model_class = model_choices.get_class("espnet")
+        model = model_class(
             vocab_size=vocab_size,
             src_vocab_size=src_vocab_size,
             frontend=frontend,
@@ -712,6 +741,7 @@ class STTask(AbsTask):
             **args.model_conf,
         )
 
+
         # FIXME(kamo): Should be done in model?
         # 9. Initialize
         if args.init is not None:
@@ -719,3 +749,20 @@ class STTask(AbsTask):
 
         assert check_return_type(model)
         return model
+
+    @classmethod
+    def build_vocoder_from_file(
+        cls,
+        vocoder_file: Union[Path, str] = None,
+        device: str = "cpu",
+    ):
+        # Build vocoder
+        if str(vocoder_file).endswith(".pkl"):
+            # If the extension is ".pkl", the model is trained with parallel_wavegan
+            vocoder = ParallelWaveGANPretrainedVocoder(
+                vocoder_file, None
+            )
+            return vocoder.to(device)
+
+        else:
+            raise ValueError(f"{vocoder_file} is not supported format.")
