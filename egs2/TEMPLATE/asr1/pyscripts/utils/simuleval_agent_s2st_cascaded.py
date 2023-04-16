@@ -6,10 +6,13 @@
 
 import random
 from simuleval.utils import entrypoint
-from simuleval.agents import SpeechToTextAgent
 from simuleval.agents.actions import ReadAction, WriteAction
+from simuleval.data.segments import SpeechSegment
+from simuleval.agents import SpeechToSpeechAgent
+
 
 from espnet2.bin.st_inference import Speech2Text
+from espnet2.bin.tts_inference import Text2Speech
 from espnet2.bin.st_inference_streaming import Speech2TextStreaming
 from espnet2.utils.types import str2bool, str2triple_str, str_or_none
 from typing import Any, List, Optional, Sequence, Tuple, Union
@@ -19,8 +22,52 @@ import logging
 from mosestokenizer import MosesDetokenizer
 
 
+# text preprocessor
+from german_transliterate.core import GermanTransliterate
+import re
+def text_normalizer(content):
+    content = re.sub(" &quot;", "", content)
+    content = re.sub(" &apos;", "", content)
+    content = re.sub("&apos; ", "", content)
+    content = re.sub("&quot; ", "", content)
+    content = re.sub("\(.*?\)", "", content)
+    content = re.sub("\(.*?\) ", "", content)
+    content = re.sub(" \(.*?\) ", " ", content)
+    content = re.sub(" %", " prozent ", content)
+    content = re.sub(" \.\.\. ", ". ", content)
+    content = re.sub(" ,", ",", content)
+    content = re.sub(" \.", ".", content)
+    content = re.sub(" !", ".", content)
+    content = re.sub(" : ", " ", content)
+    content = re.sub(" \?", ".", content)
+    content = re.sub(" &#91;", "", content)
+    content = re.sub(" &#93;", "", content)
+    content = GermanTransliterate(transliterate_ops=list(ops-{'spoken_symbol', 'acronym_phoneme'})).transliterate(content)
+    content = content.upper()
+    return content
+
+def simple_text_normalizer(content):
+    content = re.sub(" &quot;", "", content)
+    content = re.sub(" &apos;", "", content)
+    content = re.sub("&apos; ", "", content)
+    content = re.sub("&quot; ", "", content)
+    content = re.sub("\(.*?\)", "", content)
+    content = re.sub("\(.*?\) ", "", content)
+    content = re.sub(" \(.*?\) ", " ", content)
+    content = re.sub(" %", " prozent ", content)
+    content = re.sub(" \.\.\. ", ". ", content)
+    content = re.sub(" ,", ",", content)
+    content = re.sub(" \.", ".", content)
+    content = re.sub(" !", ".", content)
+    content = re.sub(" : ", " ", content)
+    content = re.sub(" \?", ".", content)
+    content = re.sub(" &#91;", "", content)
+    content = re.sub(" &#93;", "", content)
+    content = content.upper()
+    return content
+
 @entrypoint
-class DummyAgent(SpeechToTextAgent):
+class DummyAgent(SpeechToSpeechAgent):
     """
     DummyAgent operates in an offline mode.
     Waits until all source is read to run inference.
@@ -118,11 +165,32 @@ class DummyAgent(SpeechToTextAgent):
             )
             self.speech2text = Speech2TextStreaming(**speech2text_kwargs)
         
+        # 3. build text2speech
+        self.text2speech = Text2Speech.from_pretrained(
+            model_file=kwargs["tts_model"],
+            vocoder_file=kwargs["vocoder"],
+            device=device,
+            # Only for Tacotron 2 & Transformer
+            threshold=kwargs["tts_threshold"],
+            # Only for Tacotron 2
+            minlenratio=kwargs["tts_minlenratio"],
+            maxlenratio=kwargs["tts_maxlenratio"],
+            use_att_constraint=kwargs["tts_use_att_constraint"],
+            backward_window=kwargs["tts_backward_window"],
+            forward_window=kwargs["tts_forward_window"],
+            # Only for FastSpeech & FastSpeech2 & VITS
+            speed_control_alpha=kwargs["tts_speed_control_alpha"],
+            # Only for VITS
+            noise_scale=kwargs["tts_noise_scale"],
+            noise_scale_dur=kwargs["tts_noise_scale_dur"],
+        )
+        
         self.sim_chunk_length = kwargs['sim_chunk_length']
         self.backend = kwargs['backend']
         self.token_delay = kwargs['token_delay']
         self.lang = kwargs['lang']
         self.recompute = kwargs['recompute']
+        self.fs = kwargs["tts_sampling_rate"]
         self.clean()
 
     @staticmethod
@@ -396,7 +464,19 @@ class DummyAgent(SpeechToTextAgent):
             type=str2bool,
             default=False,
         )
-
+        group = parser.add_argument_group("The TTS model configuration related")
+        group.add_argument("--tts_model", type=str, required=True)
+        group.add_argument("--vocoder", type=str_or_none, default=None)
+        group.add_argument("--tts_threshold", type=float, default=0.5) # for tacotron/transformer-based AR
+        group.add_argument("--tts_minlenratio", type=float, default=0.0) # for tacotron/transformer-based AR
+        group.add_argument("--tts_maxlenratio", type=float, default=10.0) # for tacotron/transformer-based AR
+        group.add_argument("--tts_use_att_constraint", type=str2bool, default=False) # for tacotron/transformer-based AR
+        group.add_argument("--tts_backward_window", type=int, default=1) # for tacotron/transformer-based AR
+        group.add_argument("--tts_forward_window", type=int, default=3) # for tacotron/transformer-based AR
+        group.add_argument("--tts_speed_control_alpha", type=float, default=1.0) # for NAR
+        group.add_argument("--tts_noise_scale", type=float, default=0.333) # for VITS
+        group.add_argument("--tts_noise_scale_dur", type=float, default=0.333) # for VITS
+        group.add_argument("--tts_sampling_rate", type=int, default=16000)
         return parser
 
     def clean(self):
@@ -414,7 +494,23 @@ class DummyAgent(SpeechToTextAgent):
                     prediction = results[0][0][0] # multidecoder result is in this format
                 else:
                     prediction = results[0][0]
-                return WriteAction(prediction, finished=True)
+
+                try:
+                    normalize_prediction = text_normalizer(prediction)
+                except:
+                    normalize_prediction = simple_text_normalizer(prediction)
+                if len(normalize_prediction) < 2:
+                    samples = []
+                else:
+                    samples = self.text2speech(normalize_prediction)["wav"].tolist()
+                return WriteAction(
+                    SpeechSegment(
+                        content=samples,
+                        sample_rate=self.fs,
+                        finished=True,
+                    ),
+                    finished=True,
+                )
             else:
                 return ReadAction()
         
@@ -466,8 +562,33 @@ class DummyAgent(SpeechToTextAgent):
                 if unwritten_length > 0:
                     ret = prediction[-unwritten_length:]
                     print(self.processed_index, ret)
-                    return WriteAction(ret, finished=self.states.source_finished)
+
+                    try:
+                        normalize_prediction = text_normalizer(ret)
+                    except:
+                        normalize_prediction = simple_text_normalizer(ret)
+                    if len(normalize_prediction) < 2:
+                        samples = []
+                    else:
+                        samples = self.text2speech(normalize_prediction)["wav"].tolist()
+                    logging.info("output samples of length: {}".format(len(samples)))
+                    return WriteAction(
+                        SpeechSegment(
+                            content=samples,
+                            sample_rate=self.fs,
+                            finished=self.states.source_finished,
+                        ),
+                        finished=self.states.source_finished,
+                    )
                 elif self.states.source_finished:
-                    return WriteAction("", finished=self.states.source_finished)
+                    logging.info("output samples of length: 0 and finished")
+                    return WriteAction(
+                        SpeechSegment(
+                            content=[],
+                            sample_rate=self.fs,
+                            finished=self.states.source_finished,
+                        ),
+                        finished=self.states.source_finished,
+                    )
 
             return ReadAction()

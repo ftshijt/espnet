@@ -1168,7 +1168,9 @@ if ! "${skip_train}"; then
         #       but it's used only for deciding the sample ids.
 
         if [ $use_src_lang = true ]; then
-            _opts+="--src_bpemodel ${src_bpemodel} "
+            if [ "${src_token_type}" = bpe ]; then
+                _opts+="--src_bpemodel ${src_bpemodel} "
+            fi
             _opts+="--train_data_path_and_name_and_type ${_st_train_dir}/text.${src_case}.${src_lang},src_text,text "
             _opts+="--valid_data_path_and_name_and_type ${_st_valid_dir}/text.${src_case}.${src_lang},src_text,text "
         fi
@@ -1267,6 +1269,9 @@ if ! "${skip_train}"; then
 
         _num_splits_opts=
         if [ $use_src_lang = true ]; then
+            if [ "${src_token_type}" = bpe ]; then
+                _opts+="--src_bpemodel ${src_bpemodel} "
+            fi
             _num_splits_opts+="${_st_train_dir}/text.${src_case}.${src_lang} "
             _num_splits_opts+="${st_stats_dir}/train/src_text_shape.${src_token_type} "
         fi
