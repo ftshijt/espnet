@@ -11,7 +11,7 @@ simuleval --standalone --remote-port 2023 \
 --disable_repetition_detection false \
 --beam_size 5 \
 --ctc_weight 0.3 \
---sim_chunk_length 48000 \
+--sim_chunk_length 40000 \
 --backend streaming \
 --incremental_decode true \
 --penalty 0.0 \
