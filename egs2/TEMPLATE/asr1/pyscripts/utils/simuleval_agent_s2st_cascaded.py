@@ -24,6 +24,8 @@ from mosestokenizer import MosesDetokenizer
 
 # text preprocessor
 from german_transliterate.core import GermanTransliterate
+ops = {'acronym_phoneme', 'accent_peculiarity', 'amount_money', 'date', 'timestamp',
+        'weekday', 'month', 'time_of_day', 'ordinal', 'special', 'spoken_symbol'}
 import re
 def text_normalizer(content):
     content = re.sub(" &quot;", "", content)
@@ -483,6 +485,7 @@ class DummyAgent(SpeechToSpeechAgent):
         self.processed_index = -1
         self.maxlen = 0
         self.prev_prediction = ""
+        self.prev_ret = ""
 
     def policy(self):
 
@@ -524,16 +527,21 @@ class DummyAgent(SpeechToSpeechAgent):
                     speech = torch.tensor(self.states.source[self.processed_index+1:])
                 results = self.speech2text(speech=speech, is_final=self.states.source_finished)
                 self.processed_index = len(self.states.source) - 1
+                # if len(results) > 0:
+                #     logging.info("results: {}".format(results[0][0]))
+                # else:
+                #     logging.info("empty results")
+                # logging.info("self.stats.source_finished: {}".format(self.states.source_finished))
                 if not self.states.source_finished:
                     if len(results) > 0:
                         prediction = results[0][0]                  
-
                     elif self.speech2text.beam_search.running_hyps and len(self.speech2text.beam_search.running_hyps.yseq[0]) > self.maxlen:
                         prediction = self.speech2text.beam_search.running_hyps.yseq[0][1:]
                         prediction = self.speech2text.converter.ids2tokens(prediction)
                         prediction = self.speech2text.tokenizer.tokens2text(prediction)
                         self.maxlen = len(self.speech2text.beam_search.running_hyps.yseq[0])
                     else:
+                        # logging.info("return early")
                         return ReadAction()
                 else:
                     if len(results) > 0:
@@ -552,17 +560,27 @@ class DummyAgent(SpeechToSpeechAgent):
                         else:
                             prediction = prediction[0]
 
-                    unwritten_length = len(prediction) - len("".join(self.states.target))
+                    # unwritten_length = len(prediction) - len("".join(self.states.target))
+                    # logging.info("prediction: {}, self.prev_ret: {}".format(prediction, self.prev_ret))
+                    unwritten_length = len(prediction) - len(self.prev_ret)
                 else:
+                    # logging.info("prediction equal prev prediction and state source finished false")
                     unwritten_length = 0
 
                 if self.states.source_finished:
                     self.clean()
+                
+                logging.info("prediction: {}, self.prev_ret: {}".format(prediction, self.prev_ret))
 
                 if unwritten_length > 0:
                     ret = prediction[-unwritten_length:]
                     print(self.processed_index, ret)
+                    self.prev_ret += ret
+                    if self.states.source_finished:
+                        self.clean()
 
+                    # logging.info("input for tts: {}".format(ret))
+                    
                     try:
                         normalize_prediction = text_normalizer(ret)
                     except:

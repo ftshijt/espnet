@@ -1,7 +1,7 @@
 source=dump_wav/raw/tst-COMMON.en-de/wav.scp.noid
 target=dump_wav/raw/tst-COMMON.en-de/ref.trn.detok
 agent=pyscripts/utils/simuleval_agent_s2st_cascaded.py
-nj=8
+nj=1
 python=python3
 
 batch_size=1
@@ -20,6 +20,7 @@ latency_metrics="StartOffset EndOffset ATD"
 quality_metrics="WHISPER_ASR_BLEU"
 tts_model=
 tts_sampling_rate=16000
+tts_speed_control=1.0
 vocoder=none
 target_speech_lang="de"
 hugging_face_decoder=true
@@ -27,6 +28,7 @@ source_segment_size=2000
 recompute=true
 token_delay=false
 target_type=speech
+tag=
 
 # Save command line args for logging (they will be lost after utils/parse_options.sh)
 run_args=$(pyscripts/utils/print_args.py $0 "$@")
@@ -35,7 +37,7 @@ run_args=$(pyscripts/utils/print_args.py $0 "$@")
 . ./path.sh
 . ./cmd.sh
 
-output="$exp/s2st_beam${beam_size}_ctc${ctc_weight}_pen${penalty}_chunk${sim_chunk_length}_drd${disable_repetition_detection}_tokdelay${token_delay}"
+output="$exp/s2st${tag}_beam${beam_size}_ctc${ctc_weight}_pen${penalty}_chunk${sim_chunk_length}_drd${disable_repetition_detection}_tokdelay${token_delay}"
 st_train_config=$exp/config.yaml
 st_model_file=$exp/$inference_st_model
 
@@ -45,6 +47,8 @@ mkdir -p $output/split$nj
 
 ${python} local/split_text_scp.py --text $target --scp $source --dst $output/split$nj --nj $nj
 
+
+# do not compute asr-bleu here (cause need to recalculate in the next round)
 _cmd=$cuda_cmd
 ${_cmd} --gpu "${ngpu}" JOB=1:"${nj}" "${output}"/simuleval.JOB.log \
     simuleval --source $output/split$nj/source.JOB \
@@ -68,19 +72,27 @@ ${_cmd} --gpu "${ngpu}" JOB=1:"${nj}" "${output}"/simuleval.JOB.log \
         --output $output/out.JOB \
         --token_delay $token_delay \
         --target-type $target_type \
-        --quality-metrics WHISPER_ASR_BLEU \
-        --transcript-lowercase \
-        --transcript-non-punctuation \
-        --target-speech-lang ${target_speech_lang} \
         --tts_model $tts_model \
-        --tts_sampling_rate $tts_sampling_rate
+        --vocoder ${vocoder} \
+        --tts_sampling_rate $tts_sampling_rate \
+        --transcript-non-punctuation \
+        --transcript-lowercase \
+        --quality-metrics $quality_metrics \
+        --tts_speed_control_alpha $tts_speed_control \
+        --target-speech-lang ${target_speech_lang}
 
 ${python} local/merge_simuleval_logs.py --src $output/ --nj $nj --dst $output/instances.log
 
-simuleval --score-only \
-    --output $output \
-    --latency-metrics $latency_metrics \
-    --source-type speech \
-    --target-type speech >> $output/results.txt
+${_cmd} --gpu "${ngpu}" $output/results.txt \
+    simuleval --score-only \
+        --output $output \
+        --latency-metrics $latency_metrics \
+        --quality-metrics $quality_metrics \
+        --source-type speech \
+        --target-type speech \
+        --transcript-non-punctuation \
+         --transcript-lowercase \
+         --target-speech-lang ${target_speech_lang}
+
 
 cat $output/results.txt
