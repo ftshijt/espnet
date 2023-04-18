@@ -198,7 +198,7 @@ class DummyAgent(SpeechToSpeechAgent):
         self.clean()
         self.word_list = pickle.load(open('german_dict.obj', 'rb')) if kwargs['use_word_list'] else None
 
-        print(kwargs)
+        logging.info(kwargs)
 
 
     @staticmethod
