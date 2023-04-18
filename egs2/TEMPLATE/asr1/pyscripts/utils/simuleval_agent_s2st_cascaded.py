@@ -198,6 +198,9 @@ class DummyAgent(SpeechToSpeechAgent):
         self.clean()
         self.word_list = pickle.load(open('german_dict.obj', 'rb')) if kwargs['use_word_list'] else None
 
+        print(kwargs)
+
+
     @staticmethod
     def add_args(parser):
         # Note(kamo): Use '_' instead of '-' as separator.
