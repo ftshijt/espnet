@@ -185,7 +185,7 @@ class BatchBeamSearch(BeamSearch):
                     scores[k], states[k] = d.batch_score(hyp.yseq, hyp.states[k], x, pre_x)
             else:
                 scores[k], states[k] = d.batch_score(hyp.yseq, hyp.states[k], x)
-        
+
         if self.return_hs:
             return hs, scores, states
         return scores, states
@@ -210,7 +210,6 @@ class BatchBeamSearch(BeamSearch):
         """
         scores = dict()
         states = dict()
-        # import pdb;pdb.set_trace()
         for k, d in self.part_scorers.items():
             if 'ctc' in k and md2:
                 scores[k], states[k] = d.batch_score_partial(

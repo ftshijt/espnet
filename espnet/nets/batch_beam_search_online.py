@@ -128,7 +128,13 @@ class BatchBeamSearchOnline(BatchBeamSearch):
                 ]
                 scores[k], states[k] = d.batch_score(temp_yseq, hyp.states[k], x)
             else:
-                scores[k], states[k] = d.batch_score(hyp.yseq, hyp.states[k], x)
+                if 'decoder' in k and self.return_hs:
+                    scores[k], hs, states[k] = d.batch_score(hyp.yseq, hyp.states[k], x, return_hs=self.return_hs)
+                else:
+                    scores[k], states[k] = d.batch_score(hyp.yseq, hyp.states[k], x)
+
+        if self.return_hs:
+            return hs, scores, states
         return scores, states
 
     def forward(
@@ -174,14 +180,30 @@ class BatchBeamSearchOnline(BatchBeamSearch):
                 )
             )
 
-            if self.running_hyps is None:
+            if self.running_hyps is None:   # init hyps
+                init_scores = {}
+                init_states = {}
+                if 'ctc' in self.scorers.keys():
+                    self.scorers['ctc'].batch_init_state(h)
+                    init_scores['ctc'] = torch.tensor([0.0])
+                    init_states['ctc'] = [None]
+                if 'length_bonus' in self.scorers.keys():
+                    init_scores['length_bonus'] = torch.tensor([0.0])
+                    init_states['length_bonus'] = [None]
+                init_yseq = [self.sos]
+                if 'decoder' in self.scorers.keys():
+                    init_scores['decoder'] = torch.tensor([0.0])
+                    init_states['decoder'] = [None]
+                    if self.scorers['decoder'].__class__.__name__ == "HuggingFaceTransformersDecoder":
+                        init_yseq = [self.sos, 250003]
+
                 self.running_hyps = BatchHypothesis(
                     score=torch.tensor([0.0]),
-                    scores={'decoder': torch.tensor([0.0]), 'length_bonus': torch.tensor([0.0])}, 
-                    states={'decoder': [None], 'length_bonus': [None]},
+                    scores=init_scores, 
+                    states=init_states,
                     length=torch.tensor([2]),
-                    yseq=torch.tensor([[self.sos, 250003]], device=x.device),  # hacky way to avoid 2 2 hypothesis clogging decoding
-                    hs=[],
+                    yseq=torch.tensor([init_yseq], device=x.device),  # hacky way to avoid 2 2 hypothesis clogging decoding
+                    hs=[[]],
                 )
                 self.prev_incremental = self.running_hyps
 
@@ -506,6 +528,9 @@ class BatchBeamSearchOnline(BatchBeamSearch):
         """
         for k, d in self.scorers.items():
             if hasattr(d, "extend_prob"):
-                d.extend_prob(x)
+                try:
+                    d.extend_prob(x)
+                except:
+                    import pdb;pdb.set_trace()
             if hasattr(d, "extend_state"):
                 hyps.states[k] = d.extend_state(hyps.states[k])
