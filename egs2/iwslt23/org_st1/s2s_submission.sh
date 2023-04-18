@@ -19,7 +19,7 @@ simuleval --standalone --remote-port 2023 \
 --source-segment-size 2500 \
 --recompute true \
 --token_delay true \
---use_word_list false
+--use_word_list false \
 --tts_model /espnet/egs2/iwslt23/org_st1/tts_model_final/tts_model_final.pth \
 --target-type speech \
 --vocoder none \
