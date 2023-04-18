@@ -8,7 +8,7 @@ simuleval --standalone --remote-port 2023 \
 --ngpu 1 \
 --st_train_config /espnet/egs2/iwslt23/org_st1/st_model_final/config.yaml \
 --st_model_file /espnet/egs2/iwslt23/org_st1/st_model_final/valid.acc.ave_10best_at300.pth \
---disable_repeatition_detection false \
+--disable_repetition_detection false \
 --beam_size 5 \
 --ctc_weight 0.3 \
 --sim_chunk_length 40000 \
@@ -23,5 +23,4 @@ simuleval --standalone --remote-port 2023 \
 --target-type speech \
 --vocoder none \
 --tts_sampling_rate 16000 \
---tts_speed_control_alpha 1.0 \
---target-speech-lang de
+--tts_speed_control_alpha 1.0
