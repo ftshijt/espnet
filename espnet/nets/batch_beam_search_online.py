@@ -528,9 +528,6 @@ class BatchBeamSearchOnline(BatchBeamSearch):
         """
         for k, d in self.scorers.items():
             if hasattr(d, "extend_prob"):
-                try:
-                    d.extend_prob(x)
-                except:
-                    import pdb;pdb.set_trace()
+                d.extend_prob(x)
             if hasattr(d, "extend_state"):
                 hyps.states[k] = d.extend_state(hyps.states[k])
