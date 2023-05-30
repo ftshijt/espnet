@@ -22,6 +22,7 @@
       <link rel="stylesheet" href="../../../_static/nbsphinx-code-cells.css" type="text/css" />
       <link rel="stylesheet" href="../../../_static/nbsphinx-code-cells.css" type="text/css" />
       <link rel="stylesheet" href="../../../_static/nbsphinx-code-cells.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/nbsphinx-code-cells.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="../../../_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -79,6 +80,8 @@
 </ul>
 <p><span class="caption-text">Notebook:</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebook/DataPreparation_CMU_11492_692_Spring2023(Assignment0).html">CMU 11492/11692 Spring 2023: Data preparation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notebook/DataPreparation_CMU_11492_692_Spring2023(Assignment0).html#Data-preparation-in-ESPnet">Data preparation in ESPnet</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../notebook/asr_cli.html">Speech Recognition (Recipe)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../notebook/asr_library.html">Speech Recognition (Library)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../notebook/espnet2_2pass_slu_demo.html">ESPNET 2 pass SLU Demonstration</a></li>
@@ -152,6 +155,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../_gen/espnet2.hubert.html">espnet2.hubert package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../_gen/espnet2.optimizers.html">espnet2.optimizers package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../_gen/espnet2.gan_svs.html">espnet2.gan_svs package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../_gen/espnet2.asvspoof.html">espnet2.asvspoof package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../_gen/espnet2.tasks.html">espnet2.tasks package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../_gen/espnet2.text.html">espnet2.text package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../_gen/espnet2.svs.html">espnet2.svs package</a></li>
@@ -1334,13 +1338,13 @@
             <span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">midi_name</span><span class="p">)</span>
 
             <span class="n">phn_cnt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">phn_cnt</span><span class="p">)</span>
-            <span class="n">label</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
-            <span class="n">midi</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
-            <span class="n">duration_phn</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
-            <span class="n">duration_syb</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
-            <span class="n">duration_ruled_phn</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
-            <span class="n">phn_cnt</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
-            <span class="n">slur</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+            <span class="n">label</span> <span class="o">=</span> <span class="n">label</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+            <span class="n">midi</span> <span class="o">=</span> <span class="n">midi</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+            <span class="n">duration_phn</span> <span class="o">=</span> <span class="n">duration_phn</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+            <span class="n">duration_syb</span> <span class="o">=</span> <span class="n">duration_syb</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+            <span class="n">duration_ruled_phn</span> <span class="o">=</span> <span class="n">duration_ruled_phn</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+            <span class="n">phn_cnt</span> <span class="o">=</span> <span class="n">phn_cnt</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+            <span class="n">slur</span> <span class="o">=</span> <span class="n">slur</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
 
             <span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">label</span>
             <span class="n">data</span><span class="p">[</span><span class="s2">&quot;midi&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">midi</span>
