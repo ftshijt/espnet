@@ -147,6 +147,7 @@ class CommonPreprocessor(AbsPreprocessor):
         speech_name: str = "speech",
         text_name: str = "text",
         fs: int = 0,
+        nonsplit_symbol: Iterable[str] = None,
     ):
         super().__init__(train)
         self.train = train
@@ -170,6 +171,7 @@ class CommonPreprocessor(AbsPreprocessor):
                 space_symbol=space_symbol,
                 non_linguistic_symbols=non_linguistic_symbols,
                 g2p_type=g2p_type,
+                nonsplit_symbol=nonsplit_symbol,
             )
             if bpemodel not in ["whisper_en", "whisper_multilingual"]:
                 self.token_id_converter = TokenIDConverter(
@@ -330,6 +332,12 @@ class CommonPreprocessor(AbsPreprocessor):
             text = self.text_cleaner(text)
             tokens = self.tokenizer.text2tokens(text)
             text_ints = self.token_id_converter.tokens2ids(tokens)
+            if len(text_ints) > 500:
+                logging.warning(
+                    "The length of the text output exceeds 500, "
+                    "which may cause OOM on the GPU."
+                    "Please ensure that the data processing is correct and verify it."
+                )
             data[self.text_name] = np.array(text_ints, dtype=np.int64)
         if self.aux_task_names is not None and self.tokenizer is not None:
             for name in self.aux_task_names:
@@ -458,6 +466,7 @@ class CommonPreprocessor_multi(CommonPreprocessor):
         speech_name: str = "speech",
         text_name: List[str] = ["text"],
         fs: int = 0,
+        speaker_change_symbol: Iterable[str] = None,
     ):
         super().__init__(
             train=train,
@@ -480,11 +489,18 @@ class CommonPreprocessor_multi(CommonPreprocessor):
             speech_volume_normalize=speech_volume_normalize,
             speech_name=speech_name,
             fs=fs,
+            nonsplit_symbol=speaker_change_symbol,
         )
         if isinstance(text_name, str):
             self.text_name = [text_name]
         else:
             self.text_name = text_name
+
+        self.speaker_change_symbol = speaker_change_symbol
+        if speaker_change_symbol is not None:
+            assert (
+                len(self.text_name) == 1
+            ), "SOT model with speaker_change_symbol only support single text input."
 
     def _text_process(
         self, data: Dict[str, Union[str, np.ndarray]]
@@ -888,7 +904,7 @@ class EnhPreprocessor(CommonPreprocessor):
                 (sref[detect_non_silence(sref)] ** 2).mean() for sref in speech_ref
             ]
 
-            speech_mix = data[self.speech_name]
+            speech_mix = self._ensure_2d(data[self.speech_name])
             # 1. Convolve RIR
             if self.rirs is not None and self.rir_apply_prob >= np.random.random():
                 if self.noise_ref_name_prefix + "1" in data:
@@ -1064,11 +1080,7 @@ class SVSPreprocessor(AbsPreprocessor):
                 ma = np.max(np.abs(singing))
                 data[self.singing_name] = singing * self.singing_volume_normalize / ma
 
-        if (
-            self.midi_name in data
-            and self.label_name in data
-            and self.tokenizer is not None
-        ):
+        if self.midi_name in data and self.label_name in data:
             # Load label info
             lab_timeseq, text = data[self.label_name]
             lab_len = len(text)
@@ -1083,6 +1095,7 @@ class SVSPreprocessor(AbsPreprocessor):
             duration_phn = np.zeros((lab_len))
             duration_ruled_phn = np.zeros((lab_len))
             duration_syb = np.zeros((lab_len))
+            slur = np.zeros((lab_len))
             # Load score info
             tempo, syb_info = data[self.midi_name]
             phn_cnt = []
@@ -1116,18 +1129,23 @@ class SVSPreprocessor(AbsPreprocessor):
                     duration_phn[index_lab] = _duration_phn
                     duration_ruled_phn[index_lab] = _duration_ruled_phn
                     duration_syb[index_lab] = _duration_syb
+                    if syb == "—":
+                        slur[index_lab] = 1
+                    else:
+                        slur[index_lab] = 0
                     index_lab += 1
 
             assert index_lab == lab_len
             data.pop(self.midi_name)
 
             phn_cnt = np.array(phn_cnt)
-            label.astype(np.int64)
-            midi.astype(np.int64)
-            duration_phn.astype(np.int64)
-            duration_syb.astype(np.int64)
-            duration_ruled_phn.astype(np.int64)
-            phn_cnt.astype(np.int64)
+            label = label.astype(np.int64)
+            midi = midi.astype(np.int64)
+            duration_phn = duration_phn.astype(np.int64)
+            duration_syb = duration_syb.astype(np.int64)
+            duration_ruled_phn = duration_ruled_phn.astype(np.int64)
+            phn_cnt = phn_cnt.astype(np.int64)
+            slur = slur.astype(np.int64)
 
             data["label"] = label
             data["midi"] = midi
@@ -1135,6 +1153,7 @@ class SVSPreprocessor(AbsPreprocessor):
             data["duration_ruled_phn"] = duration_ruled_phn
             data["duration_syb"] = duration_syb
             data["phn_cnt"] = phn_cnt
+            data["slur"] = slur
 
         # TODO(Yuning): Add score from midi
 
