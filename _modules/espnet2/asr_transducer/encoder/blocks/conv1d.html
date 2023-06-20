@@ -290,7 +290,8 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize/Reset Conv1d cache for streaming.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            left_context: Number of left frames during chunk-by-chunk inference.</span>
+<span class="sd">            left_context: Number of previous frames the attention module can see</span>
+<span class="sd">                          in current chunk (not used here).</span>
 <span class="sd">            device: Device to use for cache tensor.</span>
 
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -348,7 +349,6 @@
         <span class="n">pos_enc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
         <span class="n">mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
         <span class="n">left_context</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-        <span class="n">right_context</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode chunk of input sequence.</span>
 
@@ -356,8 +356,8 @@
 <span class="sd">            x: Conv1d input sequences. (B, T, D_in)</span>
 <span class="sd">            pos_enc: Positional embedding sequences. (B, 2 * (T - 1), D_in)</span>
 <span class="sd">            mask: Source mask. (B, T)</span>
-<span class="sd">            left_context: Number of frames in left context.</span>
-<span class="sd">            right_context: Number of frames in right context.</span>
+<span class="sd">            left_context: Number of previous frames the attention module can see</span>
+<span class="sd">                          in current chunk (not used here).</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            x: Conv1d output sequences. (B, T, D_out)</span>
@@ -365,11 +365,7 @@
 
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">right_context</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">cache</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="p">:,</span> <span class="o">-</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lorder</span> <span class="o">+</span> <span class="n">right_context</span><span class="p">)</span> <span class="p">:</span> <span class="o">-</span><span class="n">right_context</span><span class="p">]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">cache</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="p">:,</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">lorder</span> <span class="p">:]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="p">:,</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">lorder</span> <span class="p">:]</span>
 
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 

@@ -242,7 +242,8 @@
 
 <span class="sd">        Args:</span>
 <span class="sd">            x: Input sequences. (B, T, ?)</span>
-<span class="sd">            left_context: Number of frames in left context.</span>
+<span class="sd">            left_context: Number of previous frames the attention module can see</span>
+<span class="sd">                          in current chunk.</span>
 
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">time1</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">left_context</span>
@@ -279,7 +280,8 @@
 
 <span class="sd">        Args:</span>
 <span class="sd">            x: Input sequences. (B, T, ?)</span>
-<span class="sd">            left_context: Number of frames in left context.</span>
+<span class="sd">            left_context: Number of previous frames the attention module can see</span>
+<span class="sd">                          in current chunk.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            pos_enc: Positional embedding sequences. (B, 2 * (T - 1), ?)</span>

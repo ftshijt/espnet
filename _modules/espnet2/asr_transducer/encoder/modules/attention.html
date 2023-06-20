@@ -268,7 +268,8 @@
 
 <span class="sd">        Args:</span>
 <span class="sd">            x: Input sequence. (B, H, T_1, 2 * T_1 - 1)</span>
-<span class="sd">            left_context: Number of frames in left context.</span>
+<span class="sd">            left_context: Number of previous frames to use for current chunk</span>
+<span class="sd">                          attention computation.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            x: Output sequence. (B, H, T_1, T_2)</span>
@@ -300,7 +301,8 @@
 <span class="sd">            query: Transformed query tensor. (B, H, T_1, d_k)</span>
 <span class="sd">            key: Transformed key tensor. (B, H, T_2, d_k)</span>
 <span class="sd">            pos_enc: Positional embedding tensor. (B, 2 * T_1 - 1, size)</span>
-<span class="sd">            left_context: Number of frames in left context.</span>
+<span class="sd">            left_context: Number of previous frames to use for current chunk</span>
+<span class="sd">                          attention computation.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            : Attention score. (B, H, T_1, T_2)</span>
@@ -330,7 +332,8 @@
 <span class="sd">            query: Transformed query tensor. (B, H, T_1, d_k)</span>
 <span class="sd">            key: Transformed key tensor. (B, H, T_2, d_k)</span>
 <span class="sd">            pos_enc: Positional embedding tensor. (B, 2 * T_1 - 1, size)</span>
-<span class="sd">            left_context: Number of frames in left context.</span>
+<span class="sd">            left_context: Number of previous frames to use for current chunk</span>
+<span class="sd">                          attention computation.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            : Attention score. (B, H, T_1, T_2)</span>
@@ -443,7 +446,8 @@
 <span class="sd">            pos_enc: Positional embedding tensor. (B, 2 * T_1 - 1, size)</span>
 <span class="sd">            mask: Source mask. (B, T_2)</span>
 <span class="sd">            chunk_mask: Chunk mask. (T_1, T_1)</span>
-<span class="sd">            left_context: Number of frames in left context.</span>
+<span class="sd">            left_context: Number of previous frames to use for current chunk</span>
+<span class="sd">                          attention computation.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            : Output tensor. (B, T_1, H * d_k)</span>

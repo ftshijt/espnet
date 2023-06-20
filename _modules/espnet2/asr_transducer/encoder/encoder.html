@@ -263,28 +263,14 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">dynamic_chunk_training</span> <span class="o">=</span> <span class="n">main_params</span><span class="p">[</span><span class="s2">&quot;dynamic_chunk_training&quot;</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">short_chunk_threshold</span> <span class="o">=</span> <span class="n">main_params</span><span class="p">[</span><span class="s2">&quot;short_chunk_threshold&quot;</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">short_chunk_size</span> <span class="o">=</span> <span class="n">main_params</span><span class="p">[</span><span class="s2">&quot;short_chunk_size&quot;</span><span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">left_chunk_size</span> <span class="o">=</span> <span class="n">main_params</span><span class="p">[</span><span class="s2">&quot;left_chunk_size&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_left_chunks</span> <span class="o">=</span> <span class="n">main_params</span><span class="p">[</span><span class="s2">&quot;num_left_chunks&quot;</span><span class="p">]</span>
 
-<div class="viewcode-block" id="Encoder.get_encoder_input_raw_size"><a class="viewcode-back" href="../../../../_gen/espnet2.asr_transducer.html#espnet2.asr_transducer.encoder.encoder.Encoder.get_encoder_input_raw_size">[docs]</a>    <span class="k">def</span> <span class="nf">get_encoder_input_raw_size</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">hop_length</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the corresponding number of sample for a given chunk size, in frames.</span>
-
-<span class="sd">        Where size is the number of features frames after applying subsampling.</span>
+<div class="viewcode-block" id="Encoder.reset_cache"><a class="viewcode-back" href="../../../../_gen/espnet2.asr_transducer.html#espnet2.asr_transducer.encoder.encoder.Encoder.reset_cache">[docs]</a>    <span class="k">def</span> <span class="nf">reset_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">left_context</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize/Reset encoder cache for streaming.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            size: Number of frames after subsampling.</span>
-<span class="sd">            hop_length: Frontend&#39;s hop length</span>
-
-<span class="sd">        Returns:</span>
-<span class="sd">            : Number of raw samples</span>
-
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">embed</span><span class="o">.</span><span class="n">get_size_before_subsampling</span><span class="p">(</span><span class="n">size</span><span class="p">)</span> <span class="o">*</span> <span class="n">hop_length</span></div>
-
-<div class="viewcode-block" id="Encoder.reset_streaming_cache"><a class="viewcode-back" href="../../../../_gen/espnet2.asr_transducer.html#espnet2.asr_transducer.encoder.encoder.Encoder.reset_streaming_cache">[docs]</a>    <span class="k">def</span> <span class="nf">reset_streaming_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">left_context</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize/Reset encoder streaming cache.</span>
-
-<span class="sd">        Args:</span>
-<span class="sd">            left_context: Number of frames in left context.</span>
+<span class="sd">            left_context: Number of previous frames (AFTER subsampling) the attention</span>
+<span class="sd">                          module can see in current chunk.</span>
 <span class="sd">            device: Device ID.</span>
 
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -335,7 +321,7 @@
             <span class="n">chunk_mask</span> <span class="o">=</span> <span class="n">make_chunk_mask</span><span class="p">(</span>
                 <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
                 <span class="n">chunk_size</span><span class="p">,</span>
-                <span class="n">left_chunk_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">left_chunk_size</span><span class="p">,</span>
+                <span class="n">num_left_chunks</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_left_chunks</span><span class="p">,</span>
                 <span class="n">device</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
@@ -356,7 +342,6 @@
         <span class="n">x_len</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
         <span class="n">processed_frames</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">,</span>
         <span class="n">left_context</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">32</span><span class="p">,</span>
-        <span class="n">right_context</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode input sequences as chunks.</span>
 
@@ -364,8 +349,8 @@
 <span class="sd">            x: Encoder input features. (1, T_in, F)</span>
 <span class="sd">            x_len: Encoder input features lengths. (1,)</span>
 <span class="sd">            processed_frames: Number of frames already seen.</span>
-<span class="sd">            left_context: Number of frames in left context.</span>
-<span class="sd">            right_context: Number of frames in right context.</span>
+<span class="sd">            left_context: Number of previous frames (AFTER subsampling) the attention</span>
+<span class="sd">                          module can see in current chunk.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">           x: Encoder outputs. (B, T_out, D_enc)</span>
@@ -374,27 +359,25 @@
         <span class="n">mask</span> <span class="o">=</span> <span class="n">make_source_mask</span><span class="p">(</span><span class="n">x_len</span><span class="p">)</span>
         <span class="n">x</span><span class="p">,</span> <span class="n">mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">embed</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">left_context</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">processed_mask</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">left_context</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-                <span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">left_context</span><span class="p">)</span>
-                <span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-            <span class="p">)</span>
-            <span class="n">processed_mask</span> <span class="o">=</span> <span class="n">processed_mask</span> <span class="o">&gt;=</span> <span class="n">processed_frames</span>
-            <span class="n">mask</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">processed_mask</span><span class="p">,</span> <span class="n">mask</span><span class="p">],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
 
         <span class="n">pos_enc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos_enc</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">left_context</span><span class="o">=</span><span class="n">left_context</span><span class="p">)</span>
+
+        <span class="n">processed_mask</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">left_context</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">left_context</span><span class="p">)</span><span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="n">processed_mask</span> <span class="o">=</span> <span class="n">processed_mask</span> <span class="o">&gt;=</span> <span class="n">processed_frames</span>
+
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">processed_mask</span><span class="p">,</span> <span class="n">mask</span><span class="p">],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">encoders</span><span class="o">.</span><span class="n">chunk_forward</span><span class="p">(</span>
             <span class="n">x</span><span class="p">,</span>
             <span class="n">pos_enc</span><span class="p">,</span>
             <span class="n">mask</span><span class="p">,</span>
             <span class="n">left_context</span><span class="o">=</span><span class="n">left_context</span><span class="p">,</span>
-            <span class="n">right_context</span><span class="o">=</span><span class="n">right_context</span><span class="p">,</span>
         <span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">right_context</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">:</span><span class="o">-</span><span class="n">right_context</span><span class="p">,</span> <span class="p">:]</span>
 
         <span class="k">return</span> <span class="n">x</span></div></div>
 </pre></div>

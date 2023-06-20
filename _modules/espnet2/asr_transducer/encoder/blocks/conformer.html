@@ -264,7 +264,8 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize/Reset self-attention and convolution modules cache for streaming.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            left_context: Number of left frames during chunk-by-chunk inference.</span>
+<span class="sd">            left_context: Number of previous frames the attention module can see</span>
+<span class="sd">                          in current chunk.</span>
 <span class="sd">            device: Device to use for cache tensor.</span>
 
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -313,11 +314,10 @@
 
         <span class="n">residual</span> <span class="o">=</span> <span class="n">x</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_self_att</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="n">x_q</span> <span class="o">=</span> <span class="n">x</span>
 
         <span class="n">x</span> <span class="o">=</span> <span class="n">residual</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">self_att</span><span class="p">(</span>
-                <span class="n">x_q</span><span class="p">,</span>
+                <span class="n">x</span><span class="p">,</span>
                 <span class="n">x</span><span class="p">,</span>
                 <span class="n">x</span><span class="p">,</span>
                 <span class="n">pos_enc</span><span class="p">,</span>
@@ -347,7 +347,6 @@
         <span class="n">pos_enc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
         <span class="n">mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
         <span class="n">left_context</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-        <span class="n">right_context</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Encode chunk of input sequence.</span>
 
@@ -355,8 +354,8 @@
 <span class="sd">            x: Conformer input sequences. (B, T, D_block)</span>
 <span class="sd">            pos_enc: Positional embedding sequences. (B, 2 * (T - 1), D_block)</span>
 <span class="sd">            mask: Source mask. (B, T_2)</span>
-<span class="sd">            left_context: Number of frames in left context.</span>
-<span class="sd">            right_context: Number of frames in right context.</span>
+<span class="sd">            left_context: Number of previous frames the attention module can see</span>
+<span class="sd">                          in current chunk.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            x: Conformer output sequences. (B, T, D_block)</span>
@@ -370,21 +369,17 @@
 
         <span class="n">residual</span> <span class="o">=</span> <span class="n">x</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_self_att</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
         <span class="k">if</span> <span class="n">left_context</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">key</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="p">],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">key</span> <span class="o">=</span> <span class="n">x</span>
-        <span class="n">val</span> <span class="o">=</span> <span class="n">key</span>
-
-        <span class="k">if</span> <span class="n">right_context</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">att_cache</span> <span class="o">=</span> <span class="n">key</span><span class="p">[:,</span> <span class="o">-</span><span class="p">(</span><span class="n">left_context</span> <span class="o">+</span> <span class="n">right_context</span><span class="p">)</span> <span class="p">:</span> <span class="o">-</span><span class="n">right_context</span><span class="p">,</span> <span class="p">:]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">att_cache</span> <span class="o">=</span> <span class="n">key</span><span class="p">[:,</span> <span class="o">-</span><span class="n">left_context</span><span class="p">:,</span> <span class="p">:]</span>
+        <span class="n">att_cache</span> <span class="o">=</span> <span class="n">key</span><span class="p">[:,</span> <span class="o">-</span><span class="n">left_context</span><span class="p">:,</span> <span class="p">:]</span>
 
         <span class="n">x</span> <span class="o">=</span> <span class="n">residual</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">self_att</span><span class="p">(</span>
             <span class="n">x</span><span class="p">,</span>
             <span class="n">key</span><span class="p">,</span>
-            <span class="n">val</span><span class="p">,</span>
+            <span class="n">key</span><span class="p">,</span>
             <span class="n">pos_enc</span><span class="p">,</span>
             <span class="n">mask</span><span class="p">,</span>
             <span class="n">left_context</span><span class="o">=</span><span class="n">left_context</span><span class="p">,</span>
@@ -393,17 +388,16 @@
         <span class="n">residual</span> <span class="o">=</span> <span class="n">x</span>
 
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_conv</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="n">x</span><span class="p">,</span> <span class="n">conv_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv_mod</span><span class="p">(</span>
-            <span class="n">x</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">right_context</span><span class="o">=</span><span class="n">right_context</span>
-        <span class="p">)</span>
-
+        <span class="n">x</span><span class="p">,</span> <span class="n">conv_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv_mod</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">residual</span> <span class="o">+</span> <span class="n">x</span>
+
         <span class="n">residual</span> <span class="o">=</span> <span class="n">x</span>
 
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_feed_forward</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">residual</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">feed_forward_scale</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">feed_forward</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_final</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">cache</span> <span class="o">=</span> <span class="p">[</span><span class="n">att_cache</span><span class="p">,</span> <span class="n">conv_cache</span><span class="p">]</span>
 
         <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">pos_enc</span></div></div>

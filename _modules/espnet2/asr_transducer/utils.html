@@ -206,7 +206,7 @@
   <h1>Source code for espnet2.asr_transducer.utils</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;Utility functions for Transducer models.&quot;&quot;&quot;</span>
 
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Tuple</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
 
 <span class="kn">import</span> <span class="nn">torch</span>
 
@@ -251,35 +251,50 @@
     <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span></div>
 
 
-<div class="viewcode-block" id="sub_factor_to_params"><a class="viewcode-back" href="../../../_gen/espnet2.asr_transducer.html#espnet2.asr_transducer.utils.sub_factor_to_params">[docs]</a><span class="k">def</span> <span class="nf">sub_factor_to_params</span><span class="p">(</span><span class="n">sub_factor</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">input_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get conv2D second layer parameters for given subsampling factor.</span>
+<div class="viewcode-block" id="get_convinput_module_parameters"><a class="viewcode-back" href="../../../_gen/espnet2.asr_transducer.html#espnet2.asr_transducer.utils.get_convinput_module_parameters">[docs]</a><span class="k">def</span> <span class="nf">get_convinput_module_parameters</span><span class="p">(</span>
+    <span class="n">input_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">last_conv_size</span><span class="p">,</span>
+    <span class="n">subsampling_factor</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">is_vgg</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the convolution module parameters.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        sub_factor: Subsampling factor (1/X).</span>
-<span class="sd">        input_size: Input size.</span>
+<span class="sd">        input_size: Module input size.</span>
+<span class="sd">        last_conv_size: Last convolution size for module output size computation.</span>
+<span class="sd">        subsampling_factor: Total subsampling factor.</span>
+<span class="sd">        is_vgg: Whether the module type is VGG-like.</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        : Kernel size for second convolution.</span>
-<span class="sd">        : Stride for second convolution.</span>
-<span class="sd">        : Conv2DSubsampling output size.</span>
+<span class="sd">        : First MaxPool2D kernel size or second Conv2d kernel size and stride.</span>
+<span class="sd">        output_size: Convolution module output size.</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">sub_factor</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
-        <span class="k">return</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="p">(((</span><span class="n">input_size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">-</span> <span class="mi">2</span><span class="p">))</span>
-    <span class="k">elif</span> <span class="n">sub_factor</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
-        <span class="k">return</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="p">(((</span><span class="n">input_size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">sub_factor</span> <span class="o">==</span> <span class="mi">6</span><span class="p">:</span>
-        <span class="k">return</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="p">(((</span><span class="n">input_size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span> <span class="o">//</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">is_vgg</span><span class="p">:</span>
+        <span class="n">maxpool_kernel1</span> <span class="o">=</span> <span class="n">subsampling_factor</span> <span class="o">//</span> <span class="mi">2</span>
+
+        <span class="n">output_size</span> <span class="o">=</span> <span class="n">last_conv_size</span> <span class="o">*</span> <span class="p">(((</span><span class="n">input_size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">maxpool_kernel1</span><span class="p">,</span> <span class="n">output_size</span>
+
+    <span class="k">if</span> <span class="n">subsampling_factor</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">conv_params</span> <span class="o">=</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">subsampling_factor</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="n">conv_params</span> <span class="o">=</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="s2">&quot;subsampling_factor parameter should be set to either 2, 4 or 6.&quot;</span>
-        <span class="p">)</span></div>
+        <span class="n">conv_params</span> <span class="o">=</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+
+    <span class="n">output_size</span> <span class="o">=</span> <span class="n">last_conv_size</span> <span class="o">*</span> <span class="p">(</span>
+        <span class="p">((</span><span class="n">input_size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">-</span> <span class="p">(</span><span class="n">conv_params</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_params</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span> <span class="o">//</span> <span class="n">conv_params</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">conv_params</span><span class="p">,</span> <span class="n">output_size</span></div>
 
 
 <div class="viewcode-block" id="make_chunk_mask"><a class="viewcode-back" href="../../../_gen/espnet2.asr_transducer.html#espnet2.asr_transducer.utils.make_chunk_mask">[docs]</a><span class="k">def</span> <span class="nf">make_chunk_mask</span><span class="p">(</span>
     <span class="n">size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">chunk_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-    <span class="n">left_chunk_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">num_left_chunks</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="n">device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Create chunk mask for the subsequent steps (size, size).</span>
@@ -289,7 +304,8 @@
 <span class="sd">    Args:</span>
 <span class="sd">        size: Size of the source mask.</span>
 <span class="sd">        chunk_size: Number of frames in chunk.</span>
-<span class="sd">        left_chunk_size: Size of the left context in chunks (0 means full context).</span>
+<span class="sd">        num_left_chunks: Number of left chunks the attention module can see.</span>
+<span class="sd">                           (null or negative value means full context)</span>
 <span class="sd">        device: Device for the mask tensor.</span>
 
 <span class="sd">    Returns:</span>
@@ -299,10 +315,10 @@
     <span class="n">mask</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
 
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">size</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">left_chunk_size</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">num_left_chunks</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">start</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">start</span> <span class="o">=</span> <span class="nb">max</span><span class="p">((</span><span class="n">i</span> <span class="o">//</span> <span class="n">chunk_size</span> <span class="o">-</span> <span class="n">left_chunk_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">chunk_size</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="nb">max</span><span class="p">((</span><span class="n">i</span> <span class="o">//</span> <span class="n">chunk_size</span> <span class="o">-</span> <span class="n">num_left_chunks</span><span class="p">)</span> <span class="o">*</span> <span class="n">chunk_size</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
 
         <span class="n">end</span> <span class="o">=</span> <span class="nb">min</span><span class="p">((</span><span class="n">i</span> <span class="o">//</span> <span class="n">chunk_size</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">chunk_size</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
         <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">start</span><span class="p">:</span><span class="n">end</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>

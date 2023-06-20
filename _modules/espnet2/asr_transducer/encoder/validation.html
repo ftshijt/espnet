@@ -208,7 +208,7 @@
 
 <span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Tuple</span>
 
-<span class="kn">from</span> <span class="nn">espnet2.asr_transducer.utils</span> <span class="kn">import</span> <span class="n">sub_factor_to_params</span>
+<span class="kn">from</span> <span class="nn">espnet2.asr_transducer.utils</span> <span class="kn">import</span> <span class="n">get_convinput_module_parameters</span>
 
 
 <div class="viewcode-block" id="validate_block_arguments"><a class="viewcode-back" href="../../../../_gen/espnet2.asr_transducer.html#espnet2.asr_transducer.encoder.validation.validate_block_arguments">[docs]</a><span class="k">def</span> <span class="nf">validate_block_arguments</span><span class="p">(</span>
@@ -235,7 +235,7 @@
             <span class="s2">&quot;Block </span><span class="si">%d</span><span class="s2"> in encoder doesn&#39;t have a type assigned. &quot;</span> <span class="o">%</span> <span class="n">block_id</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">block_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;branchformer&quot;</span><span class="p">,</span> <span class="s2">&quot;conformer&quot;</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="n">block_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;branchformer&quot;</span><span class="p">,</span> <span class="s2">&quot;conformer&quot;</span><span class="p">,</span> <span class="s2">&quot;ebranchformer&quot;</span><span class="p">]:</span>
         <span class="k">if</span> <span class="n">configuration</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;linear_size&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="s2">&quot;Missing &#39;linear_size&#39; argument for X-former block (ID: </span><span class="si">%d</span><span class="s2">)&quot;</span> <span class="o">%</span> <span class="n">block_id</span>
@@ -286,7 +286,7 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">vgg_like</span> <span class="o">=</span> <span class="n">configuration</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;vgg_like&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
     <span class="n">next_block_type</span> <span class="o">=</span> <span class="n">body_first_conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;block_type&quot;</span><span class="p">)</span>
-    <span class="n">allowed_next_block_type</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;branchformer&quot;</span><span class="p">,</span> <span class="s2">&quot;conformer&quot;</span><span class="p">,</span> <span class="s2">&quot;conv1d&quot;</span><span class="p">]</span>
+    <span class="n">allowed_next_block_type</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;branchformer&quot;</span><span class="p">,</span> <span class="s2">&quot;conformer&quot;</span><span class="p">,</span> <span class="s2">&quot;conv1d&quot;</span><span class="p">,</span> <span class="s2">&quot;ebranchformer&quot;</span><span class="p">]</span>
 
     <span class="k">if</span> <span class="n">next_block_type</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="p">(</span><span class="n">next_block_type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_next_block_type</span><span class="p">):</span>
         <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
@@ -301,32 +301,33 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">conv_size</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
             <span class="n">conv_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">conv_size</span><span class="p">,</span> <span class="n">conv_size</span><span class="p">)</span>
 
-        <span class="k">assert</span> <span class="n">sub_factor</span> <span class="ow">in</span> <span class="p">{</span>
-            <span class="mi">4</span><span class="p">,</span>
-            <span class="mi">6</span><span class="p">,</span>
-        <span class="p">},</span> <span class="s2">&quot;Subsampling factor for the VGG2L block should be either 4 or 6.&quot;</span>
+        <span class="k">if</span> <span class="n">sub_factor</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;VGG2L input module only support subsampling factor of 4 and 6.&quot;</span>
+            <span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">conv_size</span> <span class="o">=</span> <span class="n">configuration</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;conv_size&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">conv_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
             <span class="n">conv_size</span> <span class="o">=</span> <span class="n">conv_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 
+        <span class="k">if</span> <span class="n">sub_factor</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Conv2D input module only support subsampling factor of 2, 4 and 6.&quot;</span>
+            <span class="p">)</span>
+
     <span class="k">if</span> <span class="n">next_block_type</span> <span class="o">==</span> <span class="s2">&quot;conv1d&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">vgg_like</span><span class="p">:</span>
-            <span class="n">output_size</span> <span class="o">=</span> <span class="n">conv_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="p">((</span><span class="n">input_size</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">output_size</span> <span class="o">=</span> <span class="n">get_convinput_module_parameters</span><span class="p">(</span>
+                <span class="n">input_size</span><span class="p">,</span> <span class="n">conv_size</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">sub_factor</span><span class="p">,</span> <span class="n">is_vgg</span><span class="o">=</span><span class="kc">True</span>
+            <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">conv_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">conv_size</span> <span class="o">=</span> <span class="n">body_first_conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output_size&quot;</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
 
-            <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">conv_osize</span> <span class="o">=</span> <span class="n">sub_factor_to_params</span><span class="p">(</span><span class="n">sub_factor</span><span class="p">,</span> <span class="n">input_size</span><span class="p">)</span>
-            <span class="k">assert</span> <span class="p">(</span>
-                <span class="n">conv_osize</span> <span class="o">&gt;</span> <span class="mi">0</span>
-            <span class="p">),</span> <span class="s2">&quot;Conv2D output size is &lt;1 with input size </span><span class="si">%d</span><span class="s2"> and subsampling </span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                <span class="n">input_size</span><span class="p">,</span>
-                <span class="n">sub_factor</span><span class="p">,</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">output_size</span> <span class="o">=</span> <span class="n">get_convinput_module_parameters</span><span class="p">(</span>
+                <span class="n">input_size</span><span class="p">,</span> <span class="n">conv_size</span><span class="p">,</span> <span class="n">sub_factor</span><span class="p">,</span> <span class="n">is_vgg</span><span class="o">=</span><span class="kc">False</span>
             <span class="p">)</span>
-
-            <span class="n">output_size</span> <span class="o">=</span> <span class="n">conv_osize</span> <span class="o">*</span> <span class="n">conv_size</span>
 
         <span class="n">configuration</span><span class="p">[</span><span class="s2">&quot;output_size&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="k">else</span><span class="p">:</span>

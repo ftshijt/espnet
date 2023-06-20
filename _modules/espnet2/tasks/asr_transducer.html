@@ -208,6 +208,7 @@
 
 <span class="kn">import</span> <span class="nn">argparse</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Collection</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
@@ -220,7 +221,9 @@
 <span class="kn">from</span> <span class="nn">espnet2.asr.specaug.abs_specaug</span> <span class="kn">import</span> <span class="n">AbsSpecAug</span>
 <span class="kn">from</span> <span class="nn">espnet2.asr.specaug.specaug</span> <span class="kn">import</span> <span class="n">SpecAug</span>
 <span class="kn">from</span> <span class="nn">espnet2.asr_transducer.decoder.abs_decoder</span> <span class="kn">import</span> <span class="n">AbsDecoder</span>
+<span class="kn">from</span> <span class="nn">espnet2.asr_transducer.decoder.mega_decoder</span> <span class="kn">import</span> <span class="n">MEGADecoder</span>
 <span class="kn">from</span> <span class="nn">espnet2.asr_transducer.decoder.rnn_decoder</span> <span class="kn">import</span> <span class="n">RNNDecoder</span>
+<span class="kn">from</span> <span class="nn">espnet2.asr_transducer.decoder.rwkv_decoder</span> <span class="kn">import</span> <span class="n">RWKVDecoder</span>
 <span class="kn">from</span> <span class="nn">espnet2.asr_transducer.decoder.stateless_decoder</span> <span class="kn">import</span> <span class="n">StatelessDecoder</span>
 <span class="kn">from</span> <span class="nn">espnet2.asr_transducer.encoder.encoder</span> <span class="kn">import</span> <span class="n">Encoder</span>
 <span class="kn">from</span> <span class="nn">espnet2.asr_transducer.espnet_transducer_model</span> <span class="kn">import</span> <span class="n">ESPnetASRTransducerModel</span>
@@ -269,7 +272,9 @@
 <span class="n">decoder_choices</span> <span class="o">=</span> <span class="n">ClassChoices</span><span class="p">(</span>
     <span class="s2">&quot;decoder&quot;</span><span class="p">,</span>
     <span class="n">classes</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+        <span class="n">mega</span><span class="o">=</span><span class="n">MEGADecoder</span><span class="p">,</span>
         <span class="n">rnn</span><span class="o">=</span><span class="n">RNNDecoder</span><span class="p">,</span>
+        <span class="n">rwkv</span><span class="o">=</span><span class="n">RWKVDecoder</span><span class="p">,</span>
         <span class="n">stateless</span><span class="o">=</span><span class="n">StatelessDecoder</span><span class="p">,</span>
     <span class="p">),</span>
     <span class="n">type_check</span><span class="o">=</span><span class="n">AbsDecoder</span><span class="p">,</span>
@@ -593,6 +598,7 @@
 
         <span class="c1"># 5. Decoder</span>
         <span class="n">decoder_class</span> <span class="o">=</span> <span class="n">decoder_choices</span><span class="o">.</span><span class="n">get_class</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">decoder</span><span class="p">)</span>
+
         <span class="n">decoder</span> <span class="o">=</span> <span class="n">decoder_class</span><span class="p">(</span>
             <span class="n">vocab_size</span><span class="p">,</span>
             <span class="o">**</span><span class="n">args</span><span class="o">.</span><span class="n">decoder_conf</span><span class="p">,</span>
