@@ -206,6 +206,7 @@ class Speech2Speech:
                 #                but it may also be source text
                 if st_subtask_token_type is None:
                     st_subtask_token_type = train_args.tgt_token_type
+                    self.st_subtask_tokenizer = None
                 elif st_subtask_token_type == "bpe":
                     if st_subtask_tokenizer is not None:
                         self.st_subtask_tokenizer = build_tokenizer(token_type=st_subtask_token_type, bpemodel=st_subtask_bpemodel)
