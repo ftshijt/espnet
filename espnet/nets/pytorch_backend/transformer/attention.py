@@ -24,13 +24,13 @@ class MaxDropout(nn.Module):
             (batch_size, nhead, time1, time2) = X.size()
 
             # Generate random values between 0 and 1
-            random_values = torch.rand(batch_size, nhead, time1)
+            random_values = torch.rand(batch_size, nhead, time1).to(X.device)
 
             # Create a mask for selecting frames based on probability
-            frame_mask = (random_values < probability).unsqueeze(3).expand(-1, -1, -1, time2)
+            frame_mask = (random_values < self.p).unsqueeze(3).expand(-1, -1, -1, time2)
 
             # Set the selected frames to zero
-            X[:, :, :, :] = X[:, :, :, :] * (1 - frame_mask)
+            X[:, :, :, :] = X[:, :, :, :] * ~(frame_mask)
 
         return X
 
