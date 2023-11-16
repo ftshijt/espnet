@@ -52,6 +52,7 @@ class BaseTransformerDecoder(AbsDecoder, BatchScorerInterface):
         vocab_size: int,
         encoder_output_size: int,
         dropout_rate: float = 0.1,
+        max_remove: bool = False,
         positional_dropout_rate: float = 0.1,
         input_layer: str = "embed",
         use_output_layer: bool = True,
@@ -237,6 +238,7 @@ class TransformerDecoder(BaseTransformerDecoder):
         attention_heads: int = 4,
         linear_units: int = 2048,
         num_blocks: int = 6,
+        max_remove: bool = False,
         dropout_rate: float = 0.1,
         positional_dropout_rate: float = 0.1,
         self_attention_dropout_rate: float = 0.0,
@@ -266,10 +268,10 @@ class TransformerDecoder(BaseTransformerDecoder):
             lambda lnum: DecoderLayer(
                 attention_dim,
                 MultiHeadedAttention(
-                    attention_heads, attention_dim, self_attention_dropout_rate
+                    attention_heads, attention_dim, self_attention_dropout_rate, max_remove=max_remove
                 ),
                 MultiHeadedAttention(
-                    attention_heads, attention_dim, src_attention_dropout_rate
+                    attention_heads, attention_dim, src_attention_dropout_rate, max_remove=max_remove
                 ),
                 PositionwiseFeedForward(attention_dim, linear_units, dropout_rate),
                 dropout_rate,

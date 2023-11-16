@@ -12,6 +12,29 @@ import torch
 from torch import nn
 
 
+class MaxDropout(nn.Module):
+    def __init__(self, p: float = 0.5):
+        super(MaxDropout, self).__init__()
+        if p < 0 or p > 1:
+            raise ValueError("dropout probability has to be between 0 and 1, " "but got {}".format(p))
+        self.p = p
+
+    def forward(self, X, min_value=0.0):
+        if self.training:
+            (batch_size, nhead, time1, time2) = X.size()
+
+            # Generate random values between 0 and 1
+            random_values = torch.rand(batch_size, nhead, time1)
+
+            # Create a mask for selecting frames based on probability
+            frame_mask = (random_values < probability).unsqueeze(3).expand(-1, -1, -1, time2)
+
+            # Set the selected frames to zero
+            X[:, :, :, :] = X[:, :, :, :] * (1 - frame_mask)
+
+        return X
+
+
 class MultiHeadedAttention(nn.Module):
     """Multi-Head Attention layer.
 
@@ -22,7 +45,7 @@ class MultiHeadedAttention(nn.Module):
 
     """
 
-    def __init__(self, n_head, n_feat, dropout_rate):
+    def __init__(self, n_head, n_feat, dropout_rate, max_remove=False):
         """Construct an MultiHeadedAttention object."""
         super(MultiHeadedAttention, self).__init__()
         assert n_feat % n_head == 0
@@ -35,6 +58,8 @@ class MultiHeadedAttention(nn.Module):
         self.linear_out = nn.Linear(n_feat, n_feat)
         self.attn = None
         self.dropout = nn.Dropout(p=dropout_rate)
+        self.max_remove = max_remove
+        self.max_dropout = MaxDropout(p=dropout_rate)
 
     def forward_qkv(self, query, key, value):
         """Transform query, key and value.
@@ -78,6 +103,9 @@ class MultiHeadedAttention(nn.Module):
             mask = mask.unsqueeze(1).eq(0)  # (batch, 1, *, time2)
             min_value = torch.finfo(scores.dtype).min
             scores = scores.masked_fill(mask, min_value)
+
+            if self.max_remove:
+                scores = self.max_dropout(scores, min_value)
             self.attn = torch.softmax(scores, dim=-1).masked_fill(
                 mask, 0.0
             )  # (batch, head, time1, time2)

@@ -66,6 +66,7 @@ class TransformerEncoder(AbsEncoder):
         attention_heads: int = 4,
         linear_units: int = 2048,
         num_blocks: int = 6,
+        max_remove: bool = False,
         dropout_rate: float = 0.1,
         positional_dropout_rate: float = 0.1,
         attention_dropout_rate: float = 0.0,
@@ -144,7 +145,7 @@ class TransformerEncoder(AbsEncoder):
             lambda lnum: EncoderLayer(
                 output_size,
                 MultiHeadedAttention(
-                    attention_heads, output_size, attention_dropout_rate
+                    attention_heads, output_size, attention_dropout_rate, max_remove=max_remove
                 ),
                 positionwise_layer(*positionwise_layer_args),
                 dropout_rate,
