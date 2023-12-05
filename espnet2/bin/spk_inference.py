@@ -144,11 +144,10 @@ def inference(
 
     # 2. Build speech2embedding
     speech2embedding_kwargs = dict(
-        batch_size: int,
-        dtype: str,
-        spk_train_config: Optional[str],
-        spk_model_file: Optional[str],
-        model_tag: Optional[str],
+        batch_size=batch_size,
+        dtype=dtype,
+        spk_train_config=spk_train_config,
+        spk_model_file=spk_model_file,
     )
 
     speech2embedding = Speech2Embedding.from_pretrained(
