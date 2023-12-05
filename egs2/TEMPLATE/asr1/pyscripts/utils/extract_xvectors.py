@@ -82,14 +82,34 @@ class XVExtractor:
             )
             self.model.to(device).eval()
         elif self.toolkit == "espnet":
-            from espnet2.tasks.spk import SpeakerTask
+            from espnet2.bin.spk_inference import Speech2Embedding
+
             # NOTE(jiatong): set default config file as None
             # assume config is the same path as the model file
-            self.model, _ = SpeakerTask.build_model_from_file(
-                None, args.pretrained_model, device,
+            speech2embedding_kwargs = dict(
+                batch_size=1,
+                dtype="float32",
+                spk_train_config=None,
+                spk_model_file=args.pretrained_model,
             )
-            self.model.to(device).eval()
 
+            if args.pretrained_model.endswith("pth"):
+                logging.info(
+                    "the provided model path is end with pth,"
+                    "assume it not a huggingface model"
+                )
+                model_tag = None
+            else:
+                logging.info(
+                    "the provided model path is not end with pth,"
+                    "assume use huggingface model"
+                )
+                model_tag = args.pretrained_model
+
+            self.speech2embedding = Speech2Embedding.from_pretrained(
+                model_tag=model,
+                **speech2embedding_kwargs,
+            )
 
     def _rawnet_extract_embd(self, audio, n_samples=48000, n_segments=10):
         if len(audio.shape) > 1:
@@ -110,7 +130,7 @@ class XVExtractor:
         with torch.no_grad():
             output = self.model(audios)
         return output.mean(0).detach().cpu().numpy()
-    
+
     def _espnet_extract_embd(self, audio):
         if len(audio.shape) > 1:
             raise ValueError(
@@ -118,10 +138,9 @@ class XVExtractor:
                 f"Input data has a shape of {audio.shape}."
             )
         audio = torch.from_numpy(audio.astype(np.float32)).to(self.device)
-        with torch.no_grad():
-            output = self.model(audio.unsqueeze(0), extract_embd=True)
-        return output.squeeze(0).detach().cpu().numpy()
-    
+        output = self.self.speech2embedding(audio)
+        return output.cpu().numpy()
+
     def __call__(self, wav, in_sr):
         if self.toolkit == "speechbrain":
             wav = self.audio_norm(torch.from_numpy(wav), in_sr).to(self.device)
