@@ -18,15 +18,15 @@ from espnet2.torch_utils.set_all_random_seed import set_all_random_seed
 from espnet.utils.cli_utils import get_commandline_args
 
 
-class Speech2Embedding:
-    """Speech2Embedding class
+class Speech2SpkEmbedding:
+    """Speech2SpkEmbedding class
 
     Examples:
         >>> import soundfile
-        >>> speech2embed = Speech2Embedding("spk_config.yml", "spk.pth")
+        >>> speech2spkembed = Speech2SpkEmbedding("spk_config.yml", "spk.pth")
         >>> audio, rate = soundfile.read("speech.wav")
-        >>> speech2embed(audio)
-        
+        >>> speech2spkembed(audio)
+
     """
 
     def __init__(
@@ -44,6 +44,7 @@ class Speech2Embedding:
         )
         self.spk_model = spk_model.eval()
         self.spk_train_args = spk_train_args
+        self.device = device
         self.dtype = dtype
         self.batch_size = batch_size
         self.device = device
@@ -86,14 +87,14 @@ class Speech2Embedding:
         model_tag: Optional[str] = None,
         **kwargs: Optional[Any],
     ):
-        """Build Speech2Embedding instance from the pretrained model.
+        """Build Speech2SpkEmbedding instance from the pretrained model.
 
         Args:
             model_tag (Optional[str]): Model tag of the pretrained models.
                 Currently, the tags of espnet_model_zoo are supported.
 
         Returns:
-            Speech2Text: Speech2Embedding instance.
+            Speech2Text: Speech2SpkEmbedding instance.
 
         """
         if model_tag is not None:
@@ -109,7 +110,7 @@ class Speech2Embedding:
             d = ModelDownloader()
             kwargs.update(**d.download_and_unpack(model_tag))
 
-        return Speech2Embedding(**kwargs)
+        return Speech2SpkEmbedding(**kwargs)
 
 def inference(
     output_dir: str,
@@ -152,7 +153,7 @@ def inference(
         model_file=model_file,
     )
 
-    speech2embedding = Speech2Embedding.from_pretrained(
+    speech2embedding = Speech2SpkEmbedding.from_pretrained(
         model_tag=model_tag,
         **speech2embedding_kwargs,
     )
