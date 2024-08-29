@@ -59,7 +59,7 @@ flac.done: activate_python.sh
 	. ./activate_python.sh && { command -v flac || conda install -y libflac -c conda-forge; }
 	touch flac.done
 sox.done: activate_python.sh
-	. ./activate_python.sh && { command -v sox || conda install -y sox -c conda-forge; }
+	# . ./activate_python.sh && { command -v sox || conda install -y sox -c conda-forge; }
 	touch sox.done
 sndfile.done: activate_python.sh
 	# NOTE(kamo): The wheel version of Soundfile includes shared library and it is refered in preference.
@@ -107,11 +107,8 @@ numba.done: numpy.done
 # NOTE(kamo): Install numba before installing torch because numba requires specific numpy version now
 # (Pytorch is not related to numba directly)
 pytorch.done: packaging.done numba.done
-ifeq ($(strip $(USE_CONDA)),)
-	. ./activate_python.sh && ./installers/install_torch.sh "false" "${TH_VERSION}" "${CUDA_VERSION}"
-else
-	. ./activate_python.sh && ./installers/install_torch.sh "true" "${TH_VERSION}" "${CUDA_VERSION}"
-endif
+	pip3 install --pre torch torchaudio --index-url https://download.pytorch.org/whl/nightly/cu124
+	# . ./activate_python.sh && ./installers/install_torch.sh "false" "${TH_VERSION}" "${CUDA_VERSION}"
 	touch pytorch.done
 
 # NOTE(kamo): conda_packages is not necessary for installation of espnet, but add it the dependencies just in case.
