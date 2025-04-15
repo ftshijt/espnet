@@ -1,0 +1,20 @@
+
+# Word error rate with OpenAI-Whisper model
+# More model_tag can be from https://github.com/openai/whisper?tab=readme-ov-file#available-models-and-languages .
+# The default model is `large-v3`.
+# NOTE(jiatong): further aggregation are necessary for corpus-level WER/CER
+# --whisper_hyp_text: the hypothesis from ESPnet ASR decoding
+# --ref_text: reference text (after cleaner)
+# --whisper_wer_delete: delete errors
+# --whisper_wer_insert: insertion errors
+# --whisper_wer_replace: replacement errors
+# --whisper_wer_equal: correct matching words/character counts
+# --whisper_cer_delete: delete errors
+# --whisper_cer_insert: insertion errors
+# --whisper_cer_replace: replacement errors
+# --whisper_cer_equal: correct matching words/character counts
+- name: whisper_wer
+  model_tag: default
+  beam_size: 1
+  text_cleaner: whisper_en
+

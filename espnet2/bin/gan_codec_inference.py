@@ -39,7 +39,7 @@ class AudioCoding:
         self,
         train_config: Union[Path, str, None] = None,
         model_file: Union[Path, str, None] = None,
-        target_bandwidth: Union[Path, str, None] = None,
+        target_bandwidth: Union[int, float, None] = None,
         dtype: str = "float32",
         device: Union[str, torch.device] = "cpu",
         seed: int = 777,
@@ -82,6 +82,7 @@ class AudioCoding:
 
         batch = dict(audio=audio)
         batch = to_device(batch, self.device)
+        batch["audio"] = batch["audio"].float()
         # overwrite the decode configs if provided
         cfg = self.decode_conf
         if decode_conf is not None:
@@ -92,7 +93,9 @@ class AudioCoding:
         if self.always_fix_seed:
             set_all_random_seed(self.seed)
 
+        print("audio as input: {}".format(audio.shape))
         codes = self.model.encode(**batch, **cfg)
+        print("codes in running: {}".format(codes.shape))
         output_dict = dict(codes=codes)
 
         if encode_only:
@@ -104,6 +107,7 @@ class AudioCoding:
             else:
                 resyn_audio = self.model.decode(codes)
             output_dict.update(resyn_audio=resyn_audio)
+            print("resyn audio in running: {}".format(resyn_audio.shape))
             return output_dict
 
     @torch.no_grad()

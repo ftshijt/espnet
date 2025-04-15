@@ -54,8 +54,9 @@ class CategoryChunkIterFactory(AbsIterFactory):
         default_fs: Optional[int] = None,
         chunk_max_abs_length: Optional[int] = None,
     ):
-        assert all(len(x) == 1 for x in batches), "batch-size must be 1"
-
+        if all(len(x) == 1 for x in batches):
+            logging.warning("batch size is 1 when creating chunks"
+                            "this iterator will become the same as chunk_iterator")
         self.category_sample_iter_factory = SequenceIterFactory(
             dataset=dataset,
             batches=batches,
@@ -165,10 +166,11 @@ class CategoryChunkIterFactory(AbsIterFactory):
                     ):
                         # ignore length inconsistency for `excluded_key_prefixes`
                         continue
-                    if len(curr_batch[key]) != len(curr_batch[sequence_keys]):
+                    if len(curr_batch[key]) != len(curr_batch[sequence_keys[0]]):
                         raise RuntimeError(
                             f"All sequences must has same length: "
-                            f"{len(curr_batch[key])} != {len(curr_batch[sequence_keys])}"
+                            f"{len(curr_batch[key])} != "
+                            f"{len(curr_batch[sequence_keys[0]])}"
                         )
 
                 # Get sampling frequency of the batch to recalculate the chunk length
@@ -176,7 +178,7 @@ class CategoryChunkIterFactory(AbsIterFactory):
                 default_fs = fs if self.default_fs is None else self.default_fs
                 assert fs % default_fs == 0 or default_fs % fs == 0
 
-                L = len(curr_batch[sequence_keys])
+                L = len(curr_batch[sequence_keys[0]])
                 # Select chunk length
                 chunk_lengths = [lg * fs // default_fs for lg in self.chunk_lengths]
                 chunk_lengths = [
@@ -241,7 +243,6 @@ class CategoryChunkIterFactory(AbsIterFactory):
                     W = 0
                 cache_id_list_dict[W] = cache_id_list
                 cache_chunks_dict[W] = cache_chunks
-
         else:
             for W in cache_id_list_dict:
                 cache_id_list = cache_id_list_dict.setdefault(W, [])

@@ -1,2 +1,2 @@
 encode_only: false
-target_bandwidth: null
+target_bandwidth: 4

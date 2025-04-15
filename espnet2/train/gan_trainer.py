@@ -157,9 +157,11 @@ class GANTrainer(Trainer):
                 # (Jinchuan) skip some updates of discriminator to avoid
                 # being over-powered. Synchronized globally.
                 if skip_discriminator_prob > 0.0 and turn == "discriminator":
-                    if torch.distributed.is_initialized():
+                    if torch.distributed.is_available() and torch.distributed.is_initialized():
                         skip_disc = torch.rand(1)
                         torch.distributed.broadcast(torch.rand(1).cuda(), src=0)
+                    elif ngpu > 0:
+                        skip_disc = torch.rand(1).cuda()
                     else:
                         skip_disc = torch.rand(1)
                     if skip_disc.item() < skip_discriminator_prob:

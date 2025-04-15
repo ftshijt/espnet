@@ -4,6 +4,13 @@ import argparse
 import functools
 import logging
 import os
+
+logging.basicConfig(
+    level="INFO", 
+    format=f"[{os.uname()[1].split('.')[0]}]"
+    f" %(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s",
+)
+
 import sys
 import tempfile
 from abc import ABC, abstractmethod
@@ -1192,6 +1199,8 @@ class AbsTask(ABC):
         args: Optional[argparse.Namespace] = None,
         cmd: Optional[Sequence[str]] = None,
     ):
+        from logging_tree import printout
+        printout()
         print(get_commandline_args(), file=sys.stderr)
         if args is None:
             parser = cls.get_parser()
@@ -1296,11 +1305,15 @@ class AbsTask(ABC):
             # logging.basicConfig() is invoked in main_worker() instead of main()
             # because it can be invoked only once in a process.
             # FIXME(kamo): Should we use logging.getLogger()?
+            print("args.log_level: {}".format(args.log_level), flush=True)
             logging.basicConfig(
                 level=args.log_level,
                 format=f"[{os.uname()[1].split('.')[0]}{_rank}]"
                 f" %(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s",
             )
+            logging.info("test")
+            logging.warning("test warn")
+            logging.error("test error")
         else:
             # Suppress logging if RANK != 0
             logging.basicConfig(

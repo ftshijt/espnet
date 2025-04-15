@@ -197,7 +197,6 @@ class MultiScaleMultiPeriodMultiBandDiscriminator(nn.Module):
             discriminator_params=period_discriminator_params,
         )
 
-        # discs += [MPD(p) for p in periods]
         discs += [MultiScaleDiscriminator(r, sample_rate=sample_rate) for r in rates]
         discs += [
             MultiBandDiscriminator(
