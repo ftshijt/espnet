@@ -8,6 +8,7 @@ if torch.distributed.is_available():
 
 def recursive_sum(obj, weight: torch.Tensor, distributed: bool = False):
     assert weight.dim() == 1, weight.size()
+
     if isinstance(obj, (tuple, list)):
         return type(obj)(recursive_sum(v, weight, distributed) for v in obj)
     elif isinstance(obj, dict):
@@ -52,6 +53,7 @@ def recursive_divide(a, b: torch.Tensor):
 def recursive_average(obj, weight: torch.Tensor, distributed: bool = False):
     obj = recursive_sum(obj, weight, distributed)
     weight = weight.sum()
+
     if distributed:
         torch.distributed.all_reduce(weight, op=ReduceOp.SUM)
     # Normalize weight to be sum-to-1

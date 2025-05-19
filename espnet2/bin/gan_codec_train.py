@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
+import logging
+import os
+logging.basicConfig(
+    level="DEBUG", 
+    format=f"[{os.uname()[1].split('.')[0]}]"
+    f" %(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s",
+)
+
 from espnet2.tasks.gan_codec import GANCodecTask
+
+import os
 
 
 def get_parser():

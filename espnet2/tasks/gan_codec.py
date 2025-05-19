@@ -14,6 +14,8 @@ from typeguard import typechecked
 from espnet2.gan_codec.abs_gan_codec import AbsGANCodec
 from espnet2.gan_codec.dac.dac import DAC
 from espnet2.gan_codec.encodec.encodec import Encodec
+from espnet2.gan_codec.se_dac.se_dac import SEDAC
+from espnet2.gan_codec.se_dac2.se_dac2 import SEDAC2
 from espnet2.gan_codec.espnet_model import ESPnetGANCodecModel
 from espnet2.gan_codec.funcodec.funcodec import FunCodec
 from espnet2.gan_codec.soundstream.soundstream import SoundStream
@@ -36,7 +38,9 @@ codec_choices = ClassChoices(
         dac=DAC,
         funcodec=FunCodec,
         fsq_dac=FSQDAC,
-        semantic_dac=SemanticDAC
+        semantic_dac=SemanticDAC,
+        se_dac=SEDAC,
+        se_dac2=SEDAC2,
     ),
     default="soundstream",
 )

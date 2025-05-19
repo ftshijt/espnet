@@ -5,12 +5,6 @@ import functools
 import logging
 import os
 
-logging.basicConfig(
-    level="INFO", 
-    format=f"[{os.uname()[1].split('.')[0]}]"
-    f" %(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s",
-)
-
 import sys
 import tempfile
 from abc import ABC, abstractmethod
