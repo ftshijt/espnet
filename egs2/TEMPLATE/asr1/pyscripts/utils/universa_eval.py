@@ -83,140 +83,6 @@ def get_parser():
     return parser
 
 
-def evaluate_and_summarize(
-    ref_metrics_file,
-    pred_metrics_file,
-    level="utt",
-    sys_info_file=None,
-    skip_missing=False,
-    metric2type=None,
-):
-    """Evaluate metrics and provide summaries of regression and classification results.
-
-    Args:
-        ref_metrics_file: Path to reference metrics file
-        pred_metrics_file: Path to prediction metrics file
-        level: Evaluation level ('utt' or 'sys')
-        sys_info_file: Path to system information file
-        skip_missing: Whether to skip missing utterances
-        metric2type: Dictionary mapping metric names to types
-
-    Returns:
-        Dictionary with evaluation results and summaries
-    """
-    # Load metrics
-    ref_metrics, ref_metric_names = load_metrics(
-        ref_metrics_file, detect_metric_names=True
-    )
-    pred_metrics, metric_names = load_metrics(
-        pred_metrics_file, detect_metric_names=True
-    )
-
-    # Set default metric types if not provided
-    if metric2type is None:
-        metric2type = {metric_name: "numerical" for metric_name in metric_names}
-
-    # Load system information if provided
-    sys_info = load_sys_info(sys_info_file) if sys_info_file else None
-    assert (
-        sys_info is not None or level == "utt"
-    ), "System information is required for system-level evaluation"
-
-    # Evaluate all metrics
-    final_result = {}
-    for metric in metric_names:
-        metric_count = {
-            "miss_all": 0,
-            "miss_part_ref": 0,
-            "miss_part_pred": 0,
-            "match": 0,
-        }
-        if metric not in ref_metric_names:
-            metric_count["miss_all"] += 1
-        if level == "utt":
-            pred_metric, ref_metric = [], []
-        else:
-            pred_metric, ref_metric = {}, {}
-
-        # Collect metric values
-        for utt in pred_metrics.keys():
-            # Check for missing utterances and metrics
-            if utt not in ref_metrics.keys():
-                metric_count["miss_part_ref"] += 1
-                continue
-            if metric not in pred_metrics[utt]:
-                if skip_missing:
-                    metric_count["miss_part_pred"] += 1
-                    continue
-                raise ValueError(f"Missing metric: {metric} in prediction metric.scp")
-            if metric not in ref_metrics[utt]:
-                if skip_missing:
-                    metric_count["miss_part_ref"] += 1
-                    continue
-                raise ValueError(f"Missing metric: {metric} in reference metric.scp")
-
-            # Store metric values
-            if level == "utt":
-                pred_metric.append(pred_metrics[utt][metric])
-                ref_metric.append(ref_metrics[utt][metric])
-            else:
-                sys_id = sys_info[utt]
-                if sys_id not in pred_metric:
-                    pred_metric[sys_id] = []
-                    ref_metric[sys_id] = []
-                pred_metric[sys_id].append(pred_metrics[utt][metric])
-                ref_metric[sys_id].append(ref_metrics[utt][metric])
-
-        # Skip metrics with no data
-        if level == "utt" and len(pred_metric) == 0:
-            continue
-        elif level != "utt" and len(pred_metric) == 0:
-            continue
-
-        # Calculate metrics
-        if level == "utt":
-            if metric2type[metric] == "numerical":
-                eval_results = calculate_regression_metrics(
-                    ref_metric, pred_metric, prefix=f"utt_{metric}"
-                )
-            else:
-                eval_results = calculate_classification_metrics(
-                    ref_metric, pred_metric, prefix=f"utt_{metric}"
-                )
-        else:
-            if metric2type[metric] == "numerical":
-                pred_sys_avg = []
-                ref_sys_avg = []
-                for sys_id in pred_metric.keys():
-                    sys_pred_metrics = np.array(pred_metric[sys_id])
-                    sys_ref_metrics = np.array(ref_metric[sys_id])
-                    sys_pred_avg = np.mean(sys_pred_metrics)
-                    sys_ref_avg = np.mean(sys_ref_metrics)
-                    pred_sys_avg.append(sys_pred_avg)
-                    ref_sys_avg.append(sys_ref_avg)
-                eval_results = calculate_regression_metrics(
-                    ref_sys_avg, pred_sys_avg, prefix=f"sys_{metric}"
-                )
-            elif metric2type[metric] == "classification":
-                eval_results = calculate_system_classification_metrics(
-                    ref_metric, pred_metric, metric, prefix="sys"
-                )
-
-        # Add to final results
-        final_result.update(eval_results)
-
-    # Convert all values to float
-    for key in final_result.keys():
-        final_result[key] = float(final_result[key])
-
-    # Calculate summaries
-    summaries = summarize_metrics(final_result, skip_nan=True)
-    final_result.update(summaries)
-
-    return final_result
-
-    # print(f"{metric}: {value:.4f}")
-
 
 def summarize_metrics(results, skip_nan=True):
     """Summarize evaluation results by averaging metrics of the same type.
@@ -245,10 +111,11 @@ def summarize_metrics(results, skip_nan=True):
         metric_type = None
         base_metric = None
 
-        # Regression metrics
+        # Regression metrics (including balanced versions)
         for metric in [
             "mse",
-            "rmse",
+            "rmse", 
+            "balanced_mae",  # Add balanced MAE to summary
             "mae",
             "lcc",
             "srcc",
@@ -301,6 +168,67 @@ def summarize_metrics(results, skip_nan=True):
     }
 
 
+def calculate_balanced_mae(ref_metric_scores, pred_metric_scores, prefix="utt"):
+    """Calculate balanced (macroaveraged) MAE for ordinal regression.
+    
+    This implements the MAEM metric from Baccianella et al. (2009) which is robust
+    to class imbalance by averaging MAE across classes rather than across samples.
+
+    Args:
+        ref_metric_scores: List/array of reference/ground truth scores (numerical)
+        pred_metric_scores: List/array of predicted scores (numerical)
+        prefix: Prefix for the metric names in the output dictionary
+
+    Returns:
+        Dictionary containing balanced MAE metric
+    """
+    if len(ref_metric_scores) != len(pred_metric_scores):
+        raise ValueError(
+            f"Number of samples mismatch: {len(ref_metric_scores)} != {len(pred_metric_scores)}"
+        )
+
+    # Convert inputs to numpy arrays if they aren't already
+    ref_metric_scores = np.array(ref_metric_scores)
+    pred_metric_scores = np.array(pred_metric_scores)
+
+    # Check for NaN values
+    if np.isnan(ref_metric_scores).any():
+        raise ValueError("Input reference arrays contain NaN values")
+    if np.isnan(pred_metric_scores).any():
+        raise ValueError("Input prediction arrays contain NaN values")
+
+    # Get unique classes and organize data by class
+    unique_classes = np.unique(ref_metric_scores)
+    n_classes = len(unique_classes)
+    
+    if n_classes == 1:
+        # If there's only one class, balanced MAE is the same as regular MAE
+        return {f"{prefix}_balanced_mae": mean_absolute_error(ref_metric_scores, pred_metric_scores)}
+    
+    class_mae_values = []
+    
+    # Calculate MAE for each class
+    for class_val in unique_classes:
+        # Find indices where true class equals current class
+        class_indices = np.where(ref_metric_scores == class_val)[0]
+        
+        if len(class_indices) == 0:
+            continue
+            
+        # Get predictions for this class
+        class_ref = ref_metric_scores[class_indices]
+        class_pred = pred_metric_scores[class_indices]
+        
+        # Calculate MAE for this class
+        class_mae = np.mean(np.abs(class_pred - class_ref))
+        class_mae_values.append(class_mae)
+    
+    # Calculate balanced MAE as the mean of per-class MAEs
+    balanced_mae = np.mean(class_mae_values) if class_mae_values else np.nan
+    
+    return {f"{prefix}_balanced_mae": balanced_mae}
+
+
 def calculate_regression_metrics(ref_metric_scores, pred_metric_scores, prefix="utt"):
     """Calculate comprehensive metrics for numerical predictions/scores.
 
@@ -314,8 +242,7 @@ def calculate_regression_metrics(ref_metric_scores, pred_metric_scores, prefix="
     """
     if len(ref_metric_scores) != len(pred_metric_scores):
         raise ValueError(
-            "Num of utt mismatch: "
-            f"{len(ref_metric_scores)} != {len(pred_metric_scores)}"
+            f"Number of samples mismatch: {len(ref_metric_scores)} != {len(pred_metric_scores)}"
         )
 
     # Convert inputs to numpy arrays if they aren't already
@@ -364,7 +291,11 @@ def calculate_regression_metrics(ref_metric_scores, pred_metric_scores, prefix="
     mean_abs_error = np.mean(abs_errors)
     std_abs_error = np.std(abs_errors)
 
-    return {
+    # Calculate balanced MAE
+    balanced_mae_result = calculate_balanced_mae(ref_metric_scores, pred_metric_scores, prefix)
+
+    # Combine all results
+    results = {
         f"{prefix}_mse": mse,
         f"{prefix}_rmse": rmse,
         f"{prefix}_mae": mae,
@@ -379,6 +310,11 @@ def calculate_regression_metrics(ref_metric_scores, pred_metric_scores, prefix="
         f"{prefix}_mean_abs_error": mean_abs_error,
         f"{prefix}_std_abs_error": std_abs_error,
     }
+    
+    # Add balanced MAE
+    results.update(balanced_mae_result)
+    
+    return results
 
 
 def calculate_classification_metrics(ref_classes, pred_classes, prefix="cls"):
@@ -715,8 +651,4 @@ if __name__ == "__main__":
     logging.info(f"Results saved to {args.out_file}")
 
 # Example usage:
-# python universa_eval.py \
-#     --level utt \
-#     --ref_metrics ref_metrics.scp \
-#     --pred_metrics pred_metrics.scp \
-#     --out_file result.json
+# python universa_eval.py --level utt --ref_metrics ref_metrics.scp --pred_metrics pred_metrics.scp --out_file result.json

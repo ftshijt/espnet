@@ -555,12 +555,12 @@ class UniversaBase(AbsUniversa):
         """
         if self.multi_branch:
             results = {
-                self.id2metric[i]: pred_metrics[i].detach().cpu().numpy()
+                self.id2metric[i]: [float(value) for value in pred_metrics[i].detach().cpu().numpy()]
                 for i in range(self.metric_size)
             }
         else:
             results = {
-                self.id2metric[i]: pred_metrics[:, i].detach().cpu().numpy()
+                self.id2metric[i]: [float(value) for value in pred_metrics[:, i].detach().cpu().numpy()]
                 for i in range(self.metric_size)
             }
         results["use_tokenizer_metrics"] = []

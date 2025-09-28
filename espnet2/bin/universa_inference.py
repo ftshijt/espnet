@@ -245,10 +245,14 @@ def inference(
 
             results = universa_inference(**batch)
 
-            results.pop("encoded_feat")
+            if "encoded_feat" in results:
+                results.pop("encoded_feat")
+
+
             for i in range(_bs):
                 key = keys[i]
                 metrics_info = {k: v[i] for k, v in results.items()}
+                print(metrics_info, flush=True)
                 writer["metric.scp"][key] = json.dumps(metrics_info)
 
 
