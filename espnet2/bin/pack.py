@@ -49,8 +49,8 @@ class EnhS2TPackedContents(PackedContents):
 
 class SSLPackedContents(PackedContents):
     # These names must be consistent with the argument of inference functions
-    files = ["model_file"]
-    yaml_files = ["train_config"]
+    files = ["ssl_model_file"]
+    yaml_files = ["ssl_train_config"]
 
 
 class S2STPackedContents(PackedContents):
@@ -81,9 +81,15 @@ class CodecPackedContents(PackedContents):
     yaml_files = ["train_config"]
 
 
+
+class SpeechLMPackedContents(PackedContents):
+    files = ["model_file"]
+    yaml_files = ["train_config", "inference_config"]
+
 class UniversaPackedContents(PackedContents):
     files = ["model_file"]
     yaml_files = ["train_config"]
+
 
 
 def add_arguments(parser: argparse.ArgumentParser, contents: Type[PackedContents]):
@@ -113,6 +119,7 @@ def get_parser() -> argparse.ArgumentParser:
         ("s2t", S2TPackedContents),
         ("spk", SpkPackedContents),
         ("codec", CodecPackedContents),
+        ("speechlm", SpeechLMPackedContents),
         ("cls", ClassificationPackedContents),
         ("universa", UniversaPackedContents),
     ]:

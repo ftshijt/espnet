@@ -248,6 +248,7 @@ def inference(
             if "encoded_feat" in results:
                 results.pop("encoded_feat")
 
+
             for i in range(_bs):
                 key = keys[i]
                 metrics_info = {k: v[i] for k, v in results.items()}

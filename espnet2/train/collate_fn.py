@@ -5,10 +5,12 @@ from typing import Collection, Dict, List, Tuple, Union
 
 import numpy as np
 import scipy.signal
+import scipy
 import soundfile
 import torch
 from typeguard import typechecked
 
+from espnet2.train.preprocessor import detect_non_silence
 from espnet.nets.pytorch_backend.nets_utils import pad_list
 
 logger = logging.getLogger(__name__)
@@ -23,10 +25,12 @@ class CommonCollateFn:
         float_pad_value: Union[float, int] = 0.0,
         int_pad_value: int = -32768,
         not_sequence: Collection[str] = (),
+        not_process: Collection[str] = (),
     ):
         self.float_pad_value = float_pad_value
         self.int_pad_value = int_pad_value
         self.not_sequence = set(not_sequence)
+        self.not_process = set(not_process)
 
     def __repr__(self):
         return (
@@ -36,12 +40,13 @@ class CommonCollateFn:
 
     def __call__(
         self, data: Collection[Tuple[str, Dict[str, np.ndarray]]]
-    ) -> Tuple[List[str], Dict[str, torch.Tensor]]:
+    ) -> Tuple[List[str], Dict[str, Union[torch.Tensor, Tuple]]]:
         return common_collate_fn(
             data,
             float_pad_value=self.float_pad_value,
             int_pad_value=self.int_pad_value,
             not_sequence=self.not_sequence,
+            not_process=self.not_process,
         )
 
 
@@ -135,8 +140,8 @@ class HuBERTCollateFn(CommonCollateFn):
             self.rirs = None
 
     def _read_rir_audio_(self):
-        """
-        Read RIR audio from a list of paths.
+        """Read RIR audio from a list of paths.
+
         We cache the audio in memory to reduce I/O.
         """
         rir_path = np.random.choice(self.rir_paths)
@@ -153,8 +158,8 @@ class HuBERTCollateFn(CommonCollateFn):
         return rir
 
     def _read_noise_audio_(self):
-        """
-        Read noise audio from a list of paths.
+        """Read noise audio from a list of paths.
+
         We cache the audio in memory to reduce I/O.
         """
         noise_path = np.random.choice(self.noise_paths)
@@ -169,8 +174,7 @@ class HuBERTCollateFn(CommonCollateFn):
         return noise
 
     def _get_aligned_reverb_signal(self, speech):
-        """
-        Simulate reverberant audio with a random RIR.
+        """Simulate reverberant audio with a random RIR.
 
         It is re-aligned to the original signal for
         compatability with HuBERT-style training.
@@ -198,8 +202,9 @@ class HuBERTCollateFn(CommonCollateFn):
         return speech2.flatten()
 
     def _add_noise_wavlm(self, data, speech, speech_id):
-        """
-        WavLM-style augmentation. We randomly choose one of two methods:
+        """WavLM-style augmentation.
+
+        We randomly choose one of two methods:
             - Denoising -> sample an acoustic noise
             - Separation -> sample another utterance from the batch
 
@@ -214,7 +219,6 @@ class HuBERTCollateFn(CommonCollateFn):
             while noise[0] == speech_id:
                 noise = random.choice(data)
             noise = noise[1]["speech"]
-            speech_length = speech.shape[0]
             noise_db = np.random.uniform(
                 -self.dynamic_mixing_gain_db, self.dynamic_mixing_gain_db
             )
@@ -373,7 +377,8 @@ def common_collate_fn(
     float_pad_value: Union[float, int] = 0.0,
     int_pad_value: int = -32768,
     not_sequence: Collection[str] = (),
-) -> Tuple[List[str], Dict[str, torch.Tensor]]:
+    not_process: Collection[str] = (),
+) -> Tuple[List[str], Dict[str, Union[torch.Tensor, Tuple]]]:
     """Concatenate ndarray-list to an array and convert to torch.Tensor.
 
     Examples:
@@ -401,6 +406,12 @@ def common_collate_fn(
 
     output = {}
     for key in data[0]:
+        # NOTE(Jinchuan): force some structured items to be unchanged.
+        # return it as a tuple
+        if key in not_process:
+            output[key] = tuple(d[key] for d in data)
+            continue
+
         # NOTE(kamo):
         # Each models, which accepts these values finally, are responsible
         # to repaint the pad_value to the desired value for each tasks.
