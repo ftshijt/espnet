@@ -278,7 +278,17 @@ class UniversaTask(AbsTask):
                 for metric_name in metric2type.keys():
                     metric2type[metric_name] = "categorical"
 
-        if args.sequential_metric:
+        # NOTE(jiatong): legacy support
+        if not hasattr(args, "sequential_metric"):
+            sequential_metric = False
+            metric_token_pad_value = -100
+            randomize_sequential_metric = False
+        else:
+            sequential_metric = args.sequential_metric
+            metric_token_pad_value = args.metric_token_pad_value
+            randomize_sequential_metric = args.randomize_sequential_metric 
+
+        if sequential_metric:
             not_sequence = []
         else:
             not_sequence = ["metrics"]
@@ -287,13 +297,13 @@ class UniversaTask(AbsTask):
         return UniversaCollateFn(
             numerical_metrics=numerical_metrics,
             categorical_metrics=categorical_metrics,
-            sequential_metric=args.sequential_metric,
+            sequential_metric=sequential_metric,
             float_pad_value=0.0,
             metric_pad_value=args.metric_pad_value,
-            metric_token_pad_value=args.metric_token_pad_value,
+            metric_token_pad_value=metric_token_pad_value,
             int_pad_value=0,
             not_sequence=not_sequence,
-            randomize=args.randomize_sequential_metric,
+            randomize=randomize_sequential_metric,
         )
 
     @classmethod

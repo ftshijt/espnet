@@ -536,6 +536,7 @@ class UniversaBase(AbsUniversa):
                 # skip numeric stability with float16
                 pred_metrics = self.projector(pooling_output)
         pred_metrics = self._inference_decoration(pred_metrics)
+        pred_metrics["encoded_feat"] = audio_enc
         return pred_metrics
 
     @typechecked
@@ -554,12 +555,12 @@ class UniversaBase(AbsUniversa):
         """
         if self.multi_branch:
             results = {
-                self.id2metric[i]: pred_metrics[i].detach().cpu().numpy()
+                self.id2metric[i]: [float(value) for value in pred_metrics[i].detach().cpu().numpy()]
                 for i in range(self.metric_size)
             }
         else:
             results = {
-                self.id2metric[i]: pred_metrics[:, i].detach().cpu().numpy()
+                self.id2metric[i]: [float(value) for value in pred_metrics[:, i].detach().cpu().numpy()]
                 for i in range(self.metric_size)
             }
         results["use_tokenizer_metrics"] = []

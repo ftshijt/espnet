@@ -593,4 +593,5 @@ class ARUniversa(AbsUniversa):
 
         pred_metrics["use_tokenizer_metrics"] = True
         pred_metrics["sequential_metrics"] = True
+        pred_metrics["encoded_feat"] = audio_enc
         return pred_metrics

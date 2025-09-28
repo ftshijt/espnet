@@ -531,6 +531,7 @@ class UniversaBaseFlexibleType(AbsUniversa):
             #     exit(0)
             pred_metrics.append(pred_metric)
         pred_metrics = self._inference_decoration(pred_metrics)
+        pred_metrics["encoded_feat"] = audio_enc
         return pred_metrics
 
     @typechecked
